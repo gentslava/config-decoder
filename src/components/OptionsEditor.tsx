@@ -214,14 +214,10 @@ export const OptionsEditor: React.FC<Props> = ({
   const [expanded, setExpanded] = useState(false);
 
   const ESTIMATED_ROW = 132;
-  const baseHeight = Math.min(720, Math.max(ESTIMATED_ROW * 8, 420));
-  const height = expanded
-    ? Math.min(900, Math.max(ESTIMATED_ROW * 12, baseHeight))
-    : baseHeight;
+  const height = Math.min(720, Math.max(ESTIMATED_ROW * 8, 420));
 
   return (
     <Box>
-      {/* Хедер всегда смонтирован — фокус не теряется */}
       <Stack spacing={1}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -237,7 +233,13 @@ export const OptionsEditor: React.FC<Props> = ({
               ` • видимые ${first + 1}–${Math.max(first + 1, last)}`}
           </Typography>
           <Stack direction="row" spacing={1}>
-            <Tooltip title={expanded ? "Свернуть список" : "Развернуть список"}>
+            <Tooltip
+              title={
+                expanded
+                  ? "Свернуть список"
+                  : "Развернуть список на всю страницу"
+              }
+            >
               <Button
                 size="small"
                 variant="outlined"
@@ -271,12 +273,16 @@ export const OptionsEditor: React.FC<Props> = ({
         sx={{
           position: "relative",
           borderRadius: 2,
-          overflow: "hidden",
+          overflow: expanded ? "auto" : "hidden",
           mt: 1,
+          height: expanded ? "100%" : "auto",
+          boxSizing: expanded ? "border-box" : "initial",
+          resize: expanded ? "both" : "initial",
         }}
       >
         <Virtuoso
-          style={{ height }}
+          useWindowScroll={expanded}
+          style={{ height: expanded ? "100%" : height }}
           totalCount={filtered.length}
           increaseViewportBy={{ top: 300, bottom: 600 }}
           itemContent={(index) => {
@@ -307,12 +313,13 @@ export const OptionsEditor: React.FC<Props> = ({
             setFirst(r.startIndex);
             setLast(r.endIndex);
           }}
-          atTopStateChange={setAtTop}
-          atBottomStateChange={setAtBottom}
+          // Подсказки скролла актуальны только в "локальном" режиме
+          {...(!expanded && { atTopStateChange: setAtTop })}
+          {...(!expanded && { atBottomStateChange: setAtBottom })}
         />
 
-        {/* Верхняя подсказка скролла */}
-        {!atTop && (
+        {/* Подсказки скролла показываем только когда внутренний скролл включён */}
+        {!expanded && !atTop && (
           <Box
             sx={{
               pointerEvents: "none",
@@ -339,8 +346,8 @@ export const OptionsEditor: React.FC<Props> = ({
             </Stack>
           </Box>
         )}
-        {/* Нижняя подсказка скролла */}
-        {!atBottom && (
+
+        {!expanded && !atBottom && (
           <Box
             sx={{
               pointerEvents: "none",
