@@ -6,19 +6,21 @@ import {
   Typography,
   Button,
   TextField,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Chip,
   Box,
   Collapse,
   IconButton,
   Tooltip,
   Divider,
-  TablePagination,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  TableContainer,
+  useMediaQuery,
+  useTheme,
+  Grid,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
@@ -27,15 +29,16 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+import { TableVirtuoso, TableComponents } from "react-virtuoso";
 import type { FieldLayout } from "../core/bitConfig";
 
-interface Props {
+type Props = {
   rawJson: string;
   onApply: (text: string) => void;
   layout: FieldLayout[];
   width: number;
   setRawJson: (text: string) => void;
-}
+};
 
 export const ConfigPanel: React.FC<Props> = ({
   rawJson,
@@ -44,79 +47,144 @@ export const ConfigPanel: React.FC<Props> = ({
   width,
   setRawJson,
 }) => {
-  // --- сворачивание секций ---
+  const theme = useTheme();
+  const isXs = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [jsonCollapsed, setJsonCollapsed] = useState(false);
   const [layoutCollapsed, setLayoutCollapsed] = useState(false);
 
-  // --- превью JSON ---
   const jsonPreview = useMemo(() => {
     const max = 800;
     return rawJson.length > max ? rawJson.slice(0, max) + "…" : rawJson;
   }, [rawJson]);
 
-  // --- пагинация для полной таблицы раскладки ---
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const handleChangePage = (_: unknown, newPage: number) => setPage(newPage);
-  const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(e.target.value, 10));
-    setPage(0);
-  };
-  const pagedLayout = useMemo(
-    () => layout.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [layout, page, rowsPerPage]
-  );
-
-  // --- мини-превью таблицы при сворачивании ---
   const previewCount = 12;
   const previewLayout = useMemo(() => layout.slice(0, previewCount), [layout]);
 
+  // Виртуализированные компоненты таблицы
+  const VirtuosoTableComponents: TableComponents<FieldLayout> = {
+    Scroller: React.forwardRef<HTMLDivElement>((props, ref) => (
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{ maxHeight: { xs: 360, md: 520 } }}
+        {...props}
+        ref={ref}
+      />
+    )) as TableComponents<FieldLayout>["Scroller"],
+    Table: (props) => <Table size="small" stickyHeader {...props} />,
+    TableHead: (props) => <TableHead {...props} />,
+    TableRow: (props) => <TableRow {...props} />,
+    TableBody: React.forwardRef<HTMLTableSectionElement>((props, ref) => (
+      <TableBody {...props} ref={ref} />
+    )),
+  };
+
+  const fixedHeader = () => (
+    <TableRow>
+      <TableCell>Name</TableCell>
+      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+        HAL
+      </TableCell>
+      <TableCell align="right">Start</TableCell>
+      <TableCell align="right">Len</TableCell>
+    </TableRow>
+  );
+
+  const rowContent = (_index: number, f: FieldLayout) => (
+    <>
+      <TableCell>
+        <Typography fontWeight={600}>{f.nameEn}</Typography>
+        {f.introduce && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: { xs: "none", md: "block" } }}
+          >
+            {f.introduce}
+          </Typography>
+        )}
+      </TableCell>
+      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+        <Typography variant="caption" color="text.secondary">
+          {f.halKey}
+        </Typography>
+      </TableCell>
+      <TableCell align="right">
+        <Chip size="small" label={f.start} />
+      </TableCell>
+      <TableCell align="right">
+        <Chip size="small" label={f.length} />
+      </TableCell>
+    </>
+  );
+
+  const openFile = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      setRawJson(text);
+    };
+    input.click();
+  };
+
+  const downloadFile = () => {
+    const blob = new Blob([rawJson], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "config.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <Paper variant="outlined" sx={{ p: 3, mb: 4 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, mb: 4 }}>
+      {/* Верхняя панель с действиями — адаптивная */}
       <Stack
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ mb: 2 }}
+        sx={{ mb: { xs: 1, md: 2 } }}
       >
-        <Typography variant="h6">1) Конфигурация</Typography>
-        <Stack direction="row" spacing={1}>
-          <Tooltip title="Загрузить JSON">
-            <Button
-              startIcon={<UploadFileIcon />}
-              onClick={async () => {
-                const input = document.createElement("input");
-                input.type = "file";
-                input.accept = "application/json";
-                input.onchange = async () => {
-                  const file = input.files?.[0];
-                  if (!file) return;
-                  const text = await file.text();
-                  setRawJson(text);
-                };
-                input.click();
-              }}
-            >
+        <Typography variant="h6" sx={{ fontSize: { xs: 18, md: 20 } }}>
+          1) Конфигурация
+        </Typography>
+
+        {isXs ? (
+          <Stack direction="row" spacing={0.5}>
+            <Tooltip title="Загрузить JSON">
+              <IconButton size="small" onClick={openFile}>
+                <UploadFileIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Скачать JSON">
+              <IconButton size="small" onClick={downloadFile}>
+                <FileDownloadIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Применить">
+              <IconButton
+                color="primary"
+                size="small"
+                onClick={() => onApply(rawJson)}
+              >
+                <ConstructionIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ) : (
+          <Stack direction="row" spacing={1}>
+            <Button startIcon={<UploadFileIcon />} onClick={openFile}>
               Загрузить
             </Button>
-          </Tooltip>
-          <Tooltip title="Скачать текущий JSON">
-            <Button
-              startIcon={<FileDownloadIcon />}
-              onClick={() => {
-                const blob = new Blob([rawJson], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "config.json";
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-            >
+            <Button startIcon={<FileDownloadIcon />} onClick={downloadFile}>
               Скачать
             </Button>
-          </Tooltip>
-          <Tooltip title="Проверить и применить конфигурацию">
             <Button
               variant="contained"
               startIcon={<ConstructionIcon />}
@@ -124,70 +192,85 @@ export const ConfigPanel: React.FC<Props> = ({
             >
               Применить
             </Button>
-          </Tooltip>
-        </Stack>
-      </Stack>
-
-      {/* Сводка по конфигу */}
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            Всего бит
-          </Typography>
-          <Typography variant="h5" fontWeight={600}>
-            {width}
-          </Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            Функций
-          </Typography>
-          <Typography variant="h5" fontWeight={600}>
-            {layout.length}
-          </Typography>
-        </Paper>
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            Отображение
-          </Typography>
-          <Stack direction="row" spacing={0.5}>
-            <Tooltip
-              title={jsonCollapsed ? "Развернуть JSON" : "Свернуть JSON"}
-            >
-              <IconButton
-                size="small"
-                onClick={() => setJsonCollapsed((v) => !v)}
-              >
-                {jsonCollapsed ? <UnfoldMoreIcon /> : <UnfoldLessIcon />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip
-              title={
-                layoutCollapsed ? "Развернуть раскладку" : "Свернуть раскладку"
-              }
-            >
-              <IconButton
-                size="small"
-                onClick={() => setLayoutCollapsed((v) => !v)}
-              >
-                {layoutCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-              </IconButton>
-            </Tooltip>
           </Stack>
-        </Paper>
+        )}
       </Stack>
 
-      {/* Блок JSON */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      {/* Сводка — Grid v2 */}
+      <Grid container spacing={1.5} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+          <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Всего бит
+            </Typography>
+            <Typography
+              variant="h5"
+              fontWeight={600}
+              sx={{ fontSize: { xs: 18, md: 24 } }}
+            >
+              {width}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+          <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Функций
+            </Typography>
+            <Typography
+              variant="h5"
+              fontWeight={600}
+              sx={{ fontSize: { xs: 18, md: 24 } }}
+            >
+              {layout.length}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 1.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Отображение
+            </Typography>
+            <Stack direction="row" spacing={0.5}>
+              <Tooltip
+                title={jsonCollapsed ? "Развернуть JSON" : "Свернуть JSON"}
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => setJsonCollapsed((v) => !v)}
+                >
+                  {jsonCollapsed ? <UnfoldMoreIcon /> : <UnfoldLessIcon />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip
+                title={
+                  layoutCollapsed
+                    ? "Развернуть раскладку"
+                    : "Свернуть раскладку"
+                }
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => setLayoutCollapsed((v) => !v)}
+                >
+                  {layoutCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* JSON */}
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, mb: 2 }}>
         <Stack
           direction="row"
           alignItems="center"
@@ -200,11 +283,10 @@ export const ConfigPanel: React.FC<Props> = ({
           </IconButton>
         </Stack>
 
-        {/* Компактное превью при сворачивании */}
         <Collapse in={jsonCollapsed} unmountOnExit={false}>
           <Paper
             variant="outlined"
-            sx={{ p: 1.5, bgcolor: "background.default" }}
+            sx={{ p: 1, bgcolor: "background.default" }}
           >
             <Typography
               variant="caption"
@@ -218,7 +300,7 @@ export const ConfigPanel: React.FC<Props> = ({
               sx={{
                 m: 0,
                 p: 1,
-                maxHeight: 200,
+                maxHeight: { xs: 160, md: 200 },
                 overflow: "auto",
                 fontFamily: "JetBrains Mono, ui-monospace, monospace",
                 fontSize: 12,
@@ -231,14 +313,13 @@ export const ConfigPanel: React.FC<Props> = ({
           </Paper>
         </Collapse>
 
-        {/* Полноценный редактор при развороте */}
         <Collapse in={!jsonCollapsed} unmountOnExit>
           <TextField
             label="JSON"
             value={rawJson}
             onChange={(e) => setRawJson(e.target.value)}
             multiline
-            minRows={18}
+            minRows={isXs ? 10 : 18}
             fullWidth
             InputProps={{
               sx: {
@@ -251,8 +332,8 @@ export const ConfigPanel: React.FC<Props> = ({
         </Collapse>
       </Paper>
 
-      {/* Блок раскладки */}
-      <Paper variant="outlined" sx={{ p: 2 }}>
+      {/* Раскладка */}
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
         <Stack
           direction="row"
           alignItems="center"
@@ -268,12 +349,12 @@ export const ConfigPanel: React.FC<Props> = ({
           </IconButton>
         </Stack>
 
-        {/* Компактное превью таблицы */}
+        {/* Превью */}
         <Collapse in={layoutCollapsed} unmountOnExit={false}>
           <TableContainer
             component={Paper}
             variant="outlined"
-            sx={{ maxHeight: 360 }}
+            sx={{ maxHeight: 300 }}
           >
             <Table size="small" stickyHeader>
               <TableHead>
@@ -307,84 +388,22 @@ export const ConfigPanel: React.FC<Props> = ({
                     </TableCell>
                   </TableRow>
                 )}
-                {layout.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center">
-                      <Typography color="text.secondary">
-                        Загрузите валидный конфиг
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </TableContainer>
         </Collapse>
 
-        {/* Полная таблица с пагинацией */}
+        {/* Полная таблица (виртуализация) */}
         <Collapse in={!layoutCollapsed} unmountOnExit>
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ maxHeight: 480 }}
-          >
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>HAL</TableCell>
-                  <TableCell align="right">Start</TableCell>
-                  <TableCell align="right">Len</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {pagedLayout.map((f) => (
-                  <TableRow key={f.kindKey} hover>
-                    <TableCell>
-                      <Typography fontWeight={600}>{f.nameEn}</Typography>
-                      {f.introduce && (
-                        <Typography variant="caption" color="text.secondary">
-                          {f.introduce}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {f.halKey}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Chip size="small" label={f.start} />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Chip size="small" label={f.length} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {layout.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <Typography color="text.secondary">
-                        Загрузите валидный конфиг
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          <Divider sx={{ my: 1 }} />
-          <TablePagination
-            component="div"
-            count={layout.length}
-            page={page}
-            onPageChange={handleChangePage}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            rowsPerPageOptions={[10, 25, 50, 100]}
-            labelRowsPerPage="Строк на странице"
+          <TableVirtuoso
+            data={layout}
+            components={VirtuosoTableComponents}
+            fixedHeaderContent={fixedHeader}
+            itemContent={rowContent}
+            style={{ height: isXs ? 360 : 520 }}
+            increaseViewportBy={{ top: 200, bottom: 600 }}
           />
+          <Divider sx={{ mt: 1 }} />
         </Collapse>
       </Paper>
     </Paper>

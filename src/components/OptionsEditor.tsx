@@ -12,6 +12,7 @@ import {
   Box,
   Button,
   Tooltip,
+  InputAdornment,
 } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
@@ -19,6 +20,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
+import SearchIcon from "@mui/icons-material/Search";
 import type { FieldLayout } from "../core/bitConfig";
 import { Virtuoso } from "react-virtuoso";
 
@@ -65,7 +67,6 @@ const FieldCard: React.FC<{
     const options = useMemo(() => Array.from(f.byKey.values()), [f]);
     const isBinary = value && !f.byKey.has(value);
 
-    // приоритет окраски рамки: missing > partial > conflict > unknown
     const borderColor = status?.missing
       ? "error.main"
       : status?.partial
@@ -194,68 +195,87 @@ export const OptionsEditor: React.FC<Props> = ({
   fieldStatuses,
 }) => {
   const SMALL_LIST_THRESHOLD = 20;
-  const useVirtual = layout.length > SMALL_LIST_THRESHOLD;
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return layout;
+    return layout.filter(
+      (f) =>
+        f.nameEn.toLowerCase().includes(s) ||
+        (f.halKey || "").toLowerCase().includes(s)
+    );
+  }, [layout, q]);
+
+  const useVirtual = filtered.length > SMALL_LIST_THRESHOLD;
 
   // индикаторы списка
   const [first, setFirst] = useState(0);
-  const [last, setLast] = useState(Math.min(layout.length, 1));
+  const [last, setLast] = useState(Math.min(filtered.length, 1));
   const [atTop, setAtTop] = useState(true);
   const [atBottom, setAtBottom] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  // высота окна списка
   const ESTIMATED_ROW = 132;
   const baseHeight = Math.min(720, Math.max(ESTIMATED_ROW * 8, 420));
   const height = expanded
     ? Math.min(900, Math.max(ESTIMATED_ROW * 12, baseHeight))
     : baseHeight;
 
-  // небольшой хедер над списком с подсказкой
   const Header = (
-    <Stack
-      direction="row"
-      alignItems="center"
-      justifyContent="space-between"
-      sx={{ mb: 1 }}
-    >
-      <Typography variant="subtitle2">
-        Поля{" "}
-        {layout.length
-          ? `${first + 1}–${Math.max(first + 1, last)} из ${layout.length}`
-          : "—"}
-      </Typography>
-      <Stack direction="row" spacing={1}>
-        {!useVirtual && (
-          <Chip
-            size="small"
-            variant="outlined"
-            label={`Всего: ${layout.length}`}
-          />
-        )}
-        {useVirtual && (
-          <Tooltip title={expanded ? "Свернуть список" : "Развернуть список"}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={
-                expanded ? <CloseFullscreenIcon /> : <OpenInFullIcon />
-              }
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? "Свернуть" : "Развернуть"}
-            </Button>
-          </Tooltip>
-        )}
+    <Stack spacing={1}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        alignItems={{ sm: "center" }}
+        justifyContent="space-between"
+        sx={{ mb: 1, gap: 1 }}
+      >
+        <Typography variant="subtitle2">
+          {q
+            ? `Результаты: ${filtered.length} из ${layout.length}`
+            : `Поля ${filtered.length}`}
+          {useVirtual &&
+            filtered.length > 0 &&
+            ` • видимые ${first + 1}–${Math.max(first + 1, last)}`}
+        </Typography>
+        <Stack direction="row" spacing={1}>
+          {useVirtual && (
+            <Tooltip title={expanded ? "Свернуть список" : "Развернуть список"}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={
+                  expanded ? <CloseFullscreenIcon /> : <OpenInFullIcon />
+                }
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? "Свернуть" : "Развернуть"}
+              </Button>
+            </Tooltip>
+          )}
+        </Stack>
       </Stack>
+
+      <TextField
+        size="small"
+        placeholder="Поиск по имени или HAL…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          ),
+        }}
+      />
     </Stack>
   );
 
   if (!useVirtual) {
-    // Малый список — обычный рендер без виртуализации
     return (
       <Stack spacing={2}>
         {Header}
-        {layout.map((f) => (
+        {filtered.map((f) => (
           <FieldCard
             key={f.kindKey}
             field={f}
@@ -275,8 +295,8 @@ export const OptionsEditor: React.FC<Props> = ({
             }
           />
         ))}
-        {layout.length === 0 && (
-          <Typography color="text.secondary">Нет полей для выбора.</Typography>
+        {filtered.length === 0 && (
+          <Typography color="text.secondary">Ничего не найдено.</Typography>
         )}
       </Stack>
     );
@@ -286,13 +306,20 @@ export const OptionsEditor: React.FC<Props> = ({
     <Box>
       {Header}
 
-      <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden" }}>
+      <Box
+        sx={{
+          position: "relative",
+          borderRadius: 2,
+          overflow: "hidden",
+          mt: 1,
+        }}
+      >
         <Virtuoso
           style={{ height }}
-          totalCount={layout.length}
+          totalCount={filtered.length}
           increaseViewportBy={{ top: 300, bottom: 600 }}
           itemContent={(index) => {
-            const f = layout[index];
+            const f = filtered[index];
             return (
               <Box sx={{ mb: 2 }}>
                 <FieldCard
@@ -323,7 +350,6 @@ export const OptionsEditor: React.FC<Props> = ({
           atBottomStateChange={setAtBottom}
         />
 
-        {/* Верхняя подсказка скролла */}
         {!atTop && (
           <Box
             sx={{
@@ -333,8 +359,8 @@ export const OptionsEditor: React.FC<Props> = ({
               left: 0,
               right: 0,
               height: 48,
-              background: (theme) =>
-                `linear-gradient(${theme.palette.background.paper}, rgba(0,0,0,0))`,
+              background: (t) =>
+                `linear-gradient(${t.palette.background.paper}, rgba(0,0,0,0))`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -351,8 +377,6 @@ export const OptionsEditor: React.FC<Props> = ({
             </Stack>
           </Box>
         )}
-
-        {/* Нижняя подсказка скролла */}
         {!atBottom && (
           <Box
             sx={{
@@ -362,8 +386,8 @@ export const OptionsEditor: React.FC<Props> = ({
               left: 0,
               right: 0,
               height: 56,
-              background: (theme) =>
-                `linear-gradient(rgba(0,0,0,0), ${theme.palette.background.paper})`,
+              background: (t) =>
+                `linear-gradient(rgba(0,0,0,0), ${t.palette.background.paper})`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -382,8 +406,10 @@ export const OptionsEditor: React.FC<Props> = ({
         )}
       </Box>
 
-      {layout.length === 0 && (
-        <Typography color="text.secondary">Нет полей для выбора.</Typography>
+      {filtered.length === 0 && (
+        <Typography color="text.secondary" sx={{ mt: 1 }}>
+          Ничего не найдено.
+        </Typography>
       )}
     </Box>
   );
