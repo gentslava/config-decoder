@@ -1,5 +1,5 @@
 // src/components/OptionsEditor.tsx
-import React, { memo, useMemo } from "react";
+import React, { memo, useMemo, useState } from "react";
 import {
   Paper,
   Stack,
@@ -10,9 +10,15 @@ import {
   IconButton,
   Chip,
   Box,
+  Button,
+  Tooltip,
 } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import type { FieldLayout } from "../core/bitConfig";
 import { Virtuoso } from "react-virtuoso";
 
@@ -35,7 +41,7 @@ interface Props {
   fieldStatuses: FieldStatuses;
 }
 
-/** Одна «карточка» поля — мемоизирована для минимальных перерисовок */
+/** Карточка одного поля — мемоизирована */
 const FieldCard: React.FC<{
   field: FieldLayout;
   value: string;
@@ -187,11 +193,68 @@ export const OptionsEditor: React.FC<Props> = ({
   toggleLock,
   fieldStatuses,
 }) => {
-  // Небольшие списки рендерим без виртуализации — быстрее маунтится
-  const VIRTUALIZE_AFTER = 20;
-  if (layout.length <= VIRTUALIZE_AFTER) {
+  const SMALL_LIST_THRESHOLD = 20;
+  const useVirtual = layout.length > SMALL_LIST_THRESHOLD;
+
+  // индикаторы списка
+  const [first, setFirst] = useState(0);
+  const [last, setLast] = useState(Math.min(layout.length, 1));
+  const [atTop, setAtTop] = useState(true);
+  const [atBottom, setAtBottom] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  // высота окна списка
+  const ESTIMATED_ROW = 132;
+  const baseHeight = Math.min(720, Math.max(ESTIMATED_ROW * 8, 420));
+  const height = expanded
+    ? Math.min(900, Math.max(ESTIMATED_ROW * 12, baseHeight))
+    : baseHeight;
+
+  // небольшой хедер над списком с подсказкой
+  const Header = (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ mb: 1 }}
+    >
+      <Typography variant="subtitle2">
+        Поля{" "}
+        {layout.length
+          ? `${first + 1}–${Math.max(first + 1, last)} из ${layout.length}`
+          : "—"}
+      </Typography>
+      <Stack direction="row" spacing={1}>
+        {!useVirtual && (
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`Всего: ${layout.length}`}
+          />
+        )}
+        {useVirtual && (
+          <Tooltip title={expanded ? "Свернуть список" : "Развернуть список"}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={
+                expanded ? <CloseFullscreenIcon /> : <OpenInFullIcon />
+              }
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Свернуть" : "Развернуть"}
+            </Button>
+          </Tooltip>
+        )}
+      </Stack>
+    </Stack>
+  );
+
+  if (!useVirtual) {
+    // Малый список — обычный рендер без виртуализации
     return (
       <Stack spacing={2}>
+        {Header}
         {layout.map((f) => (
           <FieldCard
             key={f.kindKey}
@@ -219,42 +282,106 @@ export const OptionsEditor: React.FC<Props> = ({
     );
   }
 
-  // Виртуализированный список (react-virtuoso)
-  const ESTIMATED_ROW = 132; // ориентировочная высота карточки
-  const VISIBLE_ROWS = 8;
-  const height = Math.min(720, Math.max(ESTIMATED_ROW * VISIBLE_ROWS, 420));
-
   return (
     <Box>
-      <Virtuoso
-        style={{ height }}
-        totalCount={layout.length}
-        increaseViewportBy={{ top: 300, bottom: 600 }}
-        itemContent={(index) => {
-          const f = layout[index];
-          return (
-            <Box sx={{ mb: 2 }}>
-              <FieldCard
-                field={f}
-                value={selections[f.kindKey] ?? ""}
-                selections={selections}
-                setSelections={setSelections}
-                onReencode={onReencode}
-                isLocked={!!locked[f.kindKey]}
-                toggleLock={toggleLock}
-                status={
-                  fieldStatuses[f.kindKey] || {
-                    unknown: false,
-                    conflictLocked: false,
-                    missing: false,
-                    partial: false,
+      {Header}
+
+      <Box sx={{ position: "relative", borderRadius: 2, overflow: "hidden" }}>
+        <Virtuoso
+          style={{ height }}
+          totalCount={layout.length}
+          increaseViewportBy={{ top: 300, bottom: 600 }}
+          itemContent={(index) => {
+            const f = layout[index];
+            return (
+              <Box sx={{ mb: 2 }}>
+                <FieldCard
+                  field={f}
+                  value={selections[f.kindKey] ?? ""}
+                  selections={selections}
+                  setSelections={setSelections}
+                  onReencode={onReencode}
+                  isLocked={!!locked[f.kindKey]}
+                  toggleLock={toggleLock}
+                  status={
+                    fieldStatuses[f.kindKey] || {
+                      unknown: false,
+                      conflictLocked: false,
+                      missing: false,
+                      partial: false,
+                    }
                   }
-                }
-              />
-            </Box>
-          );
-        }}
-      />
+                />
+              </Box>
+            );
+          }}
+          rangeChanged={(r) => {
+            setFirst(r.startIndex);
+            setLast(r.endIndex);
+          }}
+          atTopStateChange={setAtTop}
+          atBottomStateChange={setAtBottom}
+        />
+
+        {/* Верхняя подсказка скролла */}
+        {!atTop && (
+          <Box
+            sx={{
+              pointerEvents: "none",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 48,
+              background: (theme) =>
+                `linear-gradient(${theme.palette.background.paper}, rgba(0,0,0,0))`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={0.5}
+              alignItems="center"
+              sx={{ opacity: 0.7 }}
+            >
+              <KeyboardArrowUpIcon fontSize="small" />
+              <Typography variant="caption">Прокрутите вверх</Typography>
+            </Stack>
+          </Box>
+        )}
+
+        {/* Нижняя подсказка скролла */}
+        {!atBottom && (
+          <Box
+            sx={{
+              pointerEvents: "none",
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 56,
+              background: (theme) =>
+                `linear-gradient(rgba(0,0,0,0), ${theme.palette.background.paper})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={0.5}
+              alignItems="center"
+              sx={{ opacity: 0.7 }}
+            >
+              <Typography variant="caption">Прокрутите вниз</Typography>
+              <KeyboardArrowDownIcon fontSize="small" />
+            </Stack>
+          </Box>
+        )}
+      </Box>
+
       {layout.length === 0 && (
         <Typography color="text.secondary">Нет полей для выбора.</Typography>
       )}
