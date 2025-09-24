@@ -194,7 +194,7 @@ export const OptionsEditor: React.FC<Props> = ({
   toggleLock,
   fieldStatuses,
 }) => {
-  const SMALL_LIST_THRESHOLD = 20;
+  // --- Поиск с фильтрацией (стабильный рендер, поле не размонтируется) ---
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -206,9 +206,7 @@ export const OptionsEditor: React.FC<Props> = ({
     );
   }, [layout, q]);
 
-  const useVirtual = filtered.length > SMALL_LIST_THRESHOLD;
-
-  // индикаторы списка
+  // --- индикаторы списка (для подсказок прокрутки) ---
   const [first, setFirst] = useState(0);
   const [last, setLast] = useState(Math.min(filtered.length, 1));
   const [atTop, setAtTop] = useState(true);
@@ -221,24 +219,24 @@ export const OptionsEditor: React.FC<Props> = ({
     ? Math.min(900, Math.max(ESTIMATED_ROW * 12, baseHeight))
     : baseHeight;
 
-  const Header = (
-    <Stack spacing={1}>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        alignItems={{ sm: "center" }}
-        justifyContent="space-between"
-        sx={{ mb: 1, gap: 1 }}
-      >
-        <Typography variant="subtitle2">
-          {q
-            ? `Результаты: ${filtered.length} из ${layout.length}`
-            : `Поля ${filtered.length}`}
-          {useVirtual &&
-            filtered.length > 0 &&
-            ` • видимые ${first + 1}–${Math.max(first + 1, last)}`}
-        </Typography>
-        <Stack direction="row" spacing={1}>
-          {useVirtual && (
+  return (
+    <Box>
+      {/* Хедер всегда смонтирован — фокус не теряется */}
+      <Stack spacing={1}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ sm: "center" }}
+          justifyContent="space-between"
+          sx={{ mb: 1, gap: 1 }}
+        >
+          <Typography variant="subtitle2">
+            {q
+              ? `Результаты: ${filtered.length} из ${layout.length}`
+              : `Поля ${filtered.length}`}
+            {filtered.length > 0 &&
+              ` • видимые ${first + 1}–${Math.max(first + 1, last)}`}
+          </Typography>
+          <Stack direction="row" spacing={1}>
             <Tooltip title={expanded ? "Свернуть список" : "Развернуть список"}>
               <Button
                 size="small"
@@ -251,60 +249,23 @@ export const OptionsEditor: React.FC<Props> = ({
                 {expanded ? "Свернуть" : "Развернуть"}
               </Button>
             </Tooltip>
-          )}
+          </Stack>
         </Stack>
+
+        <TextField
+          size="small"
+          placeholder="Поиск по имени или HAL…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
       </Stack>
-
-      <TextField
-        size="small"
-        placeholder="Поиск по имени или HAL…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-        }}
-      />
-    </Stack>
-  );
-
-  if (!useVirtual) {
-    return (
-      <Stack spacing={2}>
-        {Header}
-        {filtered.map((f) => (
-          <FieldCard
-            key={f.kindKey}
-            field={f}
-            value={selections[f.kindKey] ?? ""}
-            selections={selections}
-            setSelections={setSelections}
-            onReencode={onReencode}
-            isLocked={!!locked[f.kindKey]}
-            toggleLock={toggleLock}
-            status={
-              fieldStatuses[f.kindKey] || {
-                unknown: false,
-                conflictLocked: false,
-                missing: false,
-                partial: false,
-              }
-            }
-          />
-        ))}
-        {filtered.length === 0 && (
-          <Typography color="text.secondary">Ничего не найдено.</Typography>
-        )}
-      </Stack>
-    );
-  }
-
-  return (
-    <Box>
-      {Header}
 
       <Box
         sx={{
@@ -350,6 +311,7 @@ export const OptionsEditor: React.FC<Props> = ({
           atBottomStateChange={setAtBottom}
         />
 
+        {/* Верхняя подсказка скролла */}
         {!atTop && (
           <Box
             sx={{
@@ -377,6 +339,7 @@ export const OptionsEditor: React.FC<Props> = ({
             </Stack>
           </Box>
         )}
+        {/* Нижняя подсказка скролла */}
         {!atBottom && (
           <Box
             sx={{
