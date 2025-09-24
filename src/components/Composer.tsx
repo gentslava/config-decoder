@@ -35,6 +35,7 @@ import {
 import { OptionsEditor } from "./OptionsEditor";
 import { BitsEditor } from "./BitsEditor";
 import { HexEditor } from "./HexEditor";
+import { ComparePanel } from "./ComparePanel";
 
 type Props = {
   layout: FieldLayout[];
@@ -52,7 +53,9 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
   const [baseBits, setBaseBits] = useState("");
   const [hexInput, setHexInput] = useState("");
   const [rawBits, setRawBits] = useState("");
-  const [mode, setMode] = useState<"options" | "bits" | "hex">("options");
+  const [mode, setMode] = useState<"options" | "bits" | "hex" | "diff">(
+    "options"
+  );
 
   // Политика нормализации/обрезки (включает 'none')
   const [padDirection, setPadDirection] = useState<PadDirection>("none");
@@ -322,6 +325,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
           <Tab value="options" label="Опции" />
           <Tab value="bits" label="Биты" />
           <Tab value="hex" label="HEX" />
+          <Tab value="diff" label="Сравнение" />
         </Tabs>
       </Stack>
 
@@ -412,26 +416,38 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
         />
       )}
 
-      {/* Подсказки режима "не дополнять/не обрезать" */}
-      {(padDirection === "none" || trimDirection === "none") && (
-        <>
-          {shortDelta > 0 && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Входная битстрока короче ширины кадра на <b>{shortDelta}</b> бит.
-              Поля вне входа отмечены как <b>MISSING</b> или <b>PARTIAL</b>.
-            </Alert>
-          )}
-          {tailBits && tailBits.length > 0 && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Вход длиннее на <b>{tailBits.length}</b> бит. Хвост сохранён и
-              помечен как <b>неизвестные функции</b>.
-            </Alert>
-          )}
-        </>
+      {mode === "diff" && (
+        <ComparePanel
+          layout={layout}
+          width={width}
+          padDirection={padDirection}
+          trimDirection={trimDirection}
+          currentBits={bitString}
+        />
       )}
 
+      {/* Подсказки режима "не дополнять/не обрезать" */}
+      {(padDirection === "none" || trimDirection === "none") &&
+        mode !== "diff" && (
+          <>
+            {shortDelta > 0 && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Входная битстрока короче ширины кадра на <b>{shortDelta}</b>{" "}
+                бит. Поля вне входа отмечены как <b>MISSING</b> или{" "}
+                <b>PARTIAL</b>.
+              </Alert>
+            )}
+            {tailBits && tailBits.length > 0 && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Вход длиннее на <b>{tailBits.length}</b> бит. Хвост сохранён и
+                помечен как <b>неизвестные функции</b>.
+              </Alert>
+            )}
+          </>
+        )}
+
       {/* Хвост «неизвестные функции» */}
-      {tailBits && tailBits.length > 0 && (
+      {tailBits && tailBits.length > 0 && mode !== "diff" && (
         <Paper
           variant="outlined"
           sx={{ p: { xs: 1.5, md: 2 }, mt: 2, borderColor: "info.main" }}
@@ -465,10 +481,10 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
         </Paper>
       )}
 
-      <Divider sx={{ my: 2 }} />
+      <Divider sx={{ my: 2, display: mode !== "diff" ? "block" : "none" }} />
 
       {/* Конфликты блокировок */}
-      {conflicts.length > 0 && (
+      {conflicts.length > 0 && mode !== "diff" && (
         <Paper
           variant="outlined"
           sx={{ p: { xs: 1.5, md: 2 }, mb: 2, borderColor: "warning.main" }}
@@ -487,97 +503,99 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
       )}
 
       {/* Итоги / копирование */}
-      <Stack spacing={1}>
-        <Typography variant="subtitle2">Текущий результат</Typography>
+      {mode !== "diff" && (
+        <Stack spacing={1}>
+          <Typography variant="subtitle2">Текущий результат</Typography>
 
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={1}
-          alignItems={{ md: "center" }}
-        >
-          <TextField
-            fullWidth
-            size="small"
-            label="BIT (raw)"
-            value={bitString}
-            InputProps={{
-              readOnly: true,
-              sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
-            }}
-          />
-          <Tooltip title="Скопировать битовую строку">
-            <IconButton
-              onClick={() => copy(bitString)}
-              aria-label="copy bits"
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            alignItems={{ md: "center" }}
+          >
+            <TextField
+              fullWidth
               size="small"
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
+              label="BIT (raw)"
+              value={bitString}
+              InputProps={{
+                readOnly: true,
+                sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
+              }}
+            />
+            <Tooltip title="Скопировать битовую строку">
+              <IconButton
+                onClick={() => copy(bitString)}
+                aria-label="copy bits"
+                size="small"
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
 
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={1}
-          alignItems={{ md: "center" }}
-        >
-          <TextField
-            fullWidth
-            size="small"
-            label="HEX (raw)"
-            value={hexDisplay}
-            InputProps={{
-              readOnly: true,
-              sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
-            }}
-          />
-          <Tooltip title="Скопировать HEX">
-            <IconButton
-              onClick={() => copy(hexDisplay)}
-              aria-label="copy hex"
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            alignItems={{ md: "center" }}
+          >
+            <TextField
+              fullWidth
               size="small"
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
+              label="HEX (raw)"
+              value={hexDisplay}
+              InputProps={{
+                readOnly: true,
+                sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
+              }}
+            />
+            <Tooltip title="Скопировать HEX">
+              <IconButton
+                onClick={() => copy(hexDisplay)}
+                aria-label="copy hex"
+                size="small"
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
 
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={1}
-          alignItems={{ md: "center" }}
-        >
-          <TextField
-            fullWidth
-            size="small"
-            label="BigInt (raw padded to byte)"
-            value={bigIntDisplay}
-            InputProps={{
-              readOnly: true,
-              sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
-            }}
-          />
-          <Tooltip title="Скопировать BigInt">
-            <IconButton
-              onClick={() => copy(bigIntDisplay)}
-              aria-label="copy bigint"
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            alignItems={{ md: "center" }}
+          >
+            <TextField
+              fullWidth
               size="small"
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
+              label="BigInt (raw padded to byte)"
+              value={bigIntDisplay}
+              InputProps={{
+                readOnly: true,
+                sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
+              }}
+            />
+            <Tooltip title="Скопировать BigInt">
+              <IconButton
+                onClick={() => copy(bigIntDisplay)}
+                aria-label="copy bigint"
+                size="small"
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
 
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-          <DescriptionIcon fontSize="small" />
-          <Typography variant="caption" color="text.secondary">
-            В режиме «не дополнять/не обрезать» вход не нормализуется:
-            недостающие функции помечаются, хвост сохраняется. Экспорт HEX
-            выравнивает только до полного байта, без изменения внутреннего
-            буфера.
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+            <DescriptionIcon fontSize="small" />
+            <Typography variant="caption" color="text.secondary">
+              В режиме «не дополнять/не обрезать» вход не нормализуется:
+              недостающие функции помечаются, хвост сохраняется. Экспорт HEX
+              выравнивает только до полного байта, без изменения внутреннего
+              буфера.
+            </Typography>
+          </Stack>
         </Stack>
-      </Stack>
+      )}
 
       <Snackbar
         open={toast.open}
