@@ -38,14 +38,15 @@ type Props = {
   width: number;
   padDirection: PadDirection;
   trimDirection: TrimDirection;
-  /** Текущий буфер из Composer — подстановка в A/B одной кнопкой */
   currentBits: string;
 };
 
 type Coverage = "none" | "partial" | "full";
 
 type DiffRow = {
-  field: FieldLayout;
+  field: Pick<FieldLayout, "nameEn" | "halKey" | "start" | "length"> & {
+    kindKey?: string;
+  };
   aCov: Coverage;
   bCov: Coverage;
   aBits?: string;
@@ -57,9 +58,16 @@ type DiffRow = {
   bOptKey?: string;
   bOptName?: string;
   bUnknown?: boolean;
+
+  // хвостовые спец-строки
+  isTail?: boolean;
+  tailKind?: "byte" | "bit";
+  displayA?: string; // форматированное представление для A (HEX/бит)
+  displayB?: string; // для B
 };
 
 const cover = (len: number, start: number, length: number): Coverage => {
+  if (length <= 0) return "none";
   if (len <= start) return "none";
   if (len >= start + length) return "full";
   return "partial";
@@ -86,13 +94,16 @@ export const ComparePanel: React.FC<Props> = ({
   const [hexB, setHexB] = useState("");
   const [bitsB, setBitsB] = useState("");
 
-  // Подготовленные к сравнению bit-строки
+  // чем применили (влияет на единицы измерения start/len и формат хвоста)
+  const [aSource, setASource] = useState<"hex" | "bits">("bits");
+  const [bSource, setBSource] = useState<"hex" | "bits">("bits");
+
+  // нормализованные bit-строки
   const [a, setA] = useState<string>("");
   const [b, setB] = useState<string>("");
 
   const [onlyDiff, setOnlyDiff] = useState(true);
 
-  // Инфо по хвостам/короткой длине
   const aInfo = useMemo(
     () => ({
       len: a.length,
@@ -114,11 +125,15 @@ export const ComparePanel: React.FC<Props> = ({
   const applyInput = (
     hex: string,
     bits: string,
-    setOut: (v: string) => void
+    setOut: (v: string) => void,
+    setSrc: (s: "hex" | "bits") => void
   ) => {
-    const raw = hex.trim()
+    const usingHex = hex.trim().length > 0;
+    const raw = usingHex
       ? BitConfigCore.bytesToBitString(BitConfigCore.hexToBytes(hex))
       : bits.replace(/[^01]/g, "");
+    setSrc(usingHex ? "hex" : "bits");
+
     if (padDirection === "none" || trimDirection === "none") {
       setOut(raw);
     } else {
@@ -150,17 +165,26 @@ export const ComparePanel: React.FC<Props> = ({
       setA(out);
       setHexA(hex);
       setBitsA(out);
+      setASource("bits");
     } else {
       setB(out);
       setHexB(hex);
       setBitsB(out);
+      setBSource("bits");
     }
   };
 
+  // признак: показывать позиции/длины в БАЙТАХ
+  const preferHex = useMemo(
+    () => aSource === "hex" && bSource === "hex",
+    [aSource, bSource]
+  );
+
+  // расчёт строк сравнения
   const diffData: DiffRow[] = useMemo(() => {
     if (!a && !b) return [];
 
-    return layout.map((f) => {
+    const rows: DiffRow[] = layout.map((f) => {
       const aCov = cover(a.length, f.start, f.length);
       const bCov = cover(b.length, f.start, f.length);
 
@@ -171,11 +195,17 @@ export const ComparePanel: React.FC<Props> = ({
 
       const equal =
         aBits !== undefined && bBits !== undefined ? aBits === bBits : false;
-      const aRes = resolveOption(f, aBits);
-      const bRes = resolveOption(f, bBits);
+      const aRes = resolveOption(f as FieldLayout, aBits);
+      const bRes = resolveOption(f as FieldLayout, bBits);
 
       return {
-        field: f,
+        field: {
+          nameEn: f.nameEn,
+          halKey: f.halKey,
+          start: f.start,
+          length: f.length,
+          kindKey: (f as any).kindKey,
+        },
         aCov,
         bCov,
         aBits,
@@ -189,17 +219,93 @@ export const ComparePanel: React.FC<Props> = ({
         bUnknown: bRes.unknown && bBits !== undefined,
       };
     });
-  }, [a, b, layout]);
 
+    // хвостовые различия
+    const startBit = width;
+    const startByte = Math.floor(startBit / 8);
+
+    const tailA = a.length > width ? a.slice(width) : "";
+    const tailB = b.length > width ? b.slice(width) : "";
+    const maxLenBits = Math.max(tailA.length, tailB.length);
+
+    if (maxLenBits > 0) {
+      if (preferHex) {
+        // как байты (HEX)
+        const bytesA = BitConfigCore.bitStringToBytes(a);
+        const bytesB = BitConfigCore.bitStringToBytes(b);
+        const maxBytes = Math.max(bytesA.length, bytesB.length);
+
+        for (let bi = startByte; bi < maxBytes; bi++) {
+          const va = bi < bytesA.length ? bytesA[bi] : undefined;
+          const vb = bi < bytesB.length ? bytesB[bi] : undefined;
+          if (va !== vb) {
+            const hexA =
+              va === undefined
+                ? "—"
+                : va.toString(16).toUpperCase().padStart(2, "0");
+            const hexB =
+              vb === undefined
+                ? "—"
+                : vb.toString(16).toUpperCase().padStart(2, "0");
+
+            rows.push({
+              isTail: true,
+              tailKind: "byte",
+              field: {
+                nameEn: "UNKNOWN FUNCTIONS",
+                halKey: "TAIL",
+                start: bi * 8, // храним в битах, отображение вычислим ниже
+                length: 8,
+              },
+              aCov: cover(a.length, bi * 8, 8),
+              bCov: cover(b.length, bi * 8, 8),
+              equal: false,
+              displayA: hexA,
+              displayB: hexB,
+            });
+          }
+        }
+      } else {
+        // как биты
+        for (let i = 0; i < maxLenBits; i++) {
+          const va = i < tailA.length ? tailA[i] : ("-" as const);
+          const vb = i < tailB.length ? tailB[i] : ("-" as const);
+          if (va !== vb) {
+            const abs = startBit + i;
+            rows.push({
+              isTail: true,
+              tailKind: "bit",
+              field: {
+                nameEn: "UNKNOWN FUNCTIONS",
+                halKey: "TAIL",
+                start: abs,
+                length: 1,
+              },
+              aCov: cover(a.length, abs, 1),
+              bCov: cover(b.length, abs, 1),
+              equal: false,
+              displayA: va as string,
+              displayB: vb as string,
+            });
+          }
+        }
+      }
+    }
+
+    return rows;
+  }, [a, b, layout, width, preferHex]);
+
+  // фильтр
   const filtered = useMemo(() => {
     if (!onlyDiff) return diffData;
     return diffData.filter((r) => {
-      if (r.aCov === "full" && r.bCov === "full") return !r.equal; // разные значения
-      return r.aCov !== r.bCov; // разное покрытие
+      if (r.isTail) return true; // хвостовые строки добавляются только при различии
+      if (r.aCov === "full" && r.bCov === "full") return !r.equal;
+      return r.aCov !== r.bCov;
     });
   }, [diffData, onlyDiff]);
 
-  /** Компоненты MUI-таблицы для TableVirtuoso */
+  // компоненты виртуализированной таблицы
   const VirtuosoTableComponents: TableComponents<DiffRow> = {
     Scroller: React.forwardRef<HTMLDivElement>((props, ref) => (
       <TableContainer
@@ -239,6 +345,64 @@ export const ComparePanel: React.FC<Props> = ({
     </TableRow>
   );
 
+  const BitsMono = ({ value }: { value: string }) => (
+    <Tooltip title={value}>
+      <Typography
+        variant="caption"
+        sx={{
+          fontFamily: "JetBrains Mono, ui-monospace",
+          display: "block",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {value}
+      </Typography>
+    </Tooltip>
+  );
+
+  const OptChip = ({
+    keyLabel,
+    name,
+    unknown,
+  }: {
+    keyLabel?: string;
+    name?: string;
+    unknown?: boolean;
+  }) => {
+    if (keyLabel) {
+      const label = `${keyLabel} • ${name ?? keyLabel}`;
+      return (
+        <Tooltip title={label}>
+          <Chip size="small" label={label} />
+        </Tooltip>
+      );
+    }
+    if (unknown) return <Chip size="small" color="info" label="UNKNOWN" />;
+    return null;
+  };
+
+  // формат подписи start / len с учётом preferHex
+  const renderStartLen = (startBits: number, lengthBits: number) => {
+    if (preferHex) {
+      const startByte = Math.floor(startBits / 8);
+      const endBit = startBits + lengthBits;
+      const endByteExclusive = Math.ceil(endBit / 8);
+      const lenBytes = Math.max(1, endByteExclusive - startByte);
+      return (
+        <Typography variant="caption" color="text.secondary" noWrap>
+          start {startByte} • len {lenBytes} {lenBytes === 1 ? "byte" : "bytes"}
+        </Typography>
+      );
+    }
+    return (
+      <Typography variant="caption" color="text.secondary" noWrap>
+        start {startBits} • len {lengthBits}
+      </Typography>
+    );
+  };
+
   const row = (_: number, r: DiffRow) => {
     const covChip = (side: "A" | "B", cov: Coverage) => {
       if (cov === "full") return null;
@@ -261,70 +425,44 @@ export const ComparePanel: React.FC<Props> = ({
       );
     };
 
-    const diff = r.aCov === "full" && r.bCov === "full" && !r.equal;
+    const diff = r.isTail
+      ? true
+      : r.aCov === "full" && r.bCov === "full"
+      ? !r.equal
+      : r.aCov !== r.bCov;
+
     const bg = diff
       ? "var(--mui-palette-error-light, rgba(244,67,54,0.08))"
-      : r.aCov !== r.bCov
-      ? "var(--mui-palette-warning-light, rgba(255,152,0,0.08))"
       : undefined;
-
     const commonCellSx = { background: bg };
 
-    const BitsMono = ({ value }: { value: string }) => (
-      <Tooltip title={value}>
-        <Typography
-          variant="caption"
-          sx={{
-            fontFamily: "JetBrains Mono, ui-monospace",
-            display: "block",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {value}
-        </Typography>
-      </Tooltip>
-    );
-
-    const OptChip = ({
-      keyLabel,
-      name,
-      unknown,
-    }: {
-      keyLabel?: string;
-      name?: string;
-      unknown?: boolean;
-    }) => {
-      if (keyLabel) {
-        const label = `${keyLabel} • ${name ?? keyLabel}`;
-        return (
-          <Tooltip title={label}>
-            <Chip size="small" label={label} />
-          </Tooltip>
-        );
-      }
-      if (unknown) return <Chip size="small" color="info" label="UNKNOWN" />;
-      return null;
-    };
+    const title = r.field.nameEn;
 
     return (
       <>
         {/* Function */}
         <TableCell sx={commonCellSx}>
-          <Tooltip title={r.field.halKey || r.field.nameEn}>
-            <Typography fontWeight={600} noWrap>
-              {r.field.nameEn}
-            </Typography>
-          </Tooltip>
-          <Typography variant="caption" color="text.secondary" noWrap>
-            start {r.field.start} • len {r.field.length}
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Tooltip title={r.field.halKey || title}>
+              <Typography fontWeight={600} noWrap>
+                {title}
+              </Typography>
+            </Tooltip>
+            {r.isTail && <Chip size="small" variant="outlined" label="TAIL" />}
+          </Stack>
+          {renderStartLen(r.field.start, r.field.length)}
         </TableCell>
 
         {/* A */}
         <TableCell sx={commonCellSx}>
-          {r.aCov === "full" ? (
+          {r.isTail ? (
+            <Typography
+              variant="caption"
+              sx={{ fontFamily: "JetBrains Mono, ui-monospace" }}
+            >
+              {r.displayA}
+            </Typography>
+          ) : r.aCov === "full" ? (
             <Box>
               {r.aBits && <BitsMono value={r.aBits} />}
               <Box sx={{ mt: 0.5 }}>
@@ -344,7 +482,14 @@ export const ComparePanel: React.FC<Props> = ({
 
         {/* B */}
         <TableCell sx={commonCellSx}>
-          {r.bCov === "full" ? (
+          {r.isTail ? (
+            <Typography
+              variant="caption"
+              sx={{ fontFamily: "JetBrains Mono, ui-monospace" }}
+            >
+              {r.displayB}
+            </Typography>
+          ) : r.bCov === "full" ? (
             <Box>
               {r.bBits && <BitsMono value={r.bBits} />}
               <Box sx={{ mt: 0.5 }}>
@@ -362,25 +507,19 @@ export const ComparePanel: React.FC<Props> = ({
           )}
         </TableCell>
 
-        {/* Status (без UNKNOWN — только покрытие и итог) */}
+        {/* Status */}
         <TableCell align="right" sx={commonCellSx}>
           <Box
             sx={{
               display: "inline-flex",
               flexWrap: "wrap",
               justifyContent: "flex-end",
+              gap: 0.5,
             }}
           >
             {r.aCov !== "full" && covChip("A", r.aCov)}
             {r.bCov !== "full" && covChip("B", r.bCov)}
-            {diff ? (
-              <Chip size="small" color="error" label="DIFF" />
-            ) : (
-              r.aCov === "full" &&
-              r.bCov === "full" && (
-                <Chip size="small" color="success" label="EQUAL" />
-              )
-            )}
+            <Chip size="small" color="error" label="DIFF" />
           </Box>
         </TableCell>
       </>
@@ -421,7 +560,7 @@ export const ComparePanel: React.FC<Props> = ({
                     size="small"
                     variant="contained"
                     startIcon={<DoneIcon />}
-                    onClick={() => applyInput(hexA, bitsA, setA)}
+                    onClick={() => applyInput(hexA, bitsA, setA, setASource)}
                   >
                     Применить A
                   </Button>
@@ -502,7 +641,7 @@ export const ComparePanel: React.FC<Props> = ({
                     size="small"
                     variant="contained"
                     startIcon={<DoneIcon />}
-                    onClick={() => applyInput(hexB, bitsB, setB)}
+                    onClick={() => applyInput(hexB, bitsB, setB, setBSource)}
                   >
                     Применить B
                   </Button>
@@ -559,10 +698,12 @@ export const ComparePanel: React.FC<Props> = ({
 
         <Alert severity="info">
           Режим нормализации унаследован из верхней панели:{" "}
-          {`Дополнение = ${padDirection}, Обрезка = ${trimDirection}. `}В режиме{" "}
-          <b>none</b> / <b>none</b> длины не подгоняются: короткие входы
-          помечаются MISSING/PARTIAL, длинные — хвост игнорируется при сравнении
-          (анализируется «голова» шириной конфигурации).
+          {`Дополнение = ${padDirection}, Обрезка = ${trimDirection}. `}
+          Если оба входа применены из <b>HEX</b>, подпись <i>start/len</i> под
+          названием функции показывается в <b>байтах</b>
+          (start — индекс байта, len — количество байт). Иначе — в <b>битах</b>.
+          Различия в хвосте добавляются как отдельные строки (по байтам для HEX,
+          по битам — иначе).
         </Alert>
 
         <Stack
