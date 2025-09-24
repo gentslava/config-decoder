@@ -246,47 +246,6 @@ export const ConfigPanel: React.FC<Props> = ({
             </Typography>
           </Paper>
         </Grid>
-        <Grid size={{ xs: 12, sm: 4, md: 6 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 1.5,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Typography variant="caption" color="text.secondary">
-              Отображение
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip
-                title={jsonCollapsed ? "Развернуть JSON" : "Свернуть JSON"}
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => setJsonCollapsed((v) => !v)}
-                >
-                  {jsonCollapsed ? <UnfoldMoreIcon /> : <UnfoldLessIcon />}
-                </IconButton>
-              </Tooltip>
-              <Tooltip
-                title={
-                  layoutCollapsed
-                    ? "Развернуть раскладку"
-                    : "Свернуть раскладку"
-                }
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => setLayoutCollapsed((v) => !v)}
-                >
-                  {layoutCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          </Paper>
-        </Grid>
       </Grid>
 
       {/* JSON */}
