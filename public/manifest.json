@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "GWM Config Decoder",
+  "name": "GWM Config Decoder — приложение для разбора и сравнения битовых конфигураций по JSON.",
   "icons": [
     {
       "src": "favicon.ico",

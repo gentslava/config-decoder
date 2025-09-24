@@ -8,15 +8,14 @@ import {
   Box,
   Typography,
   Alert,
-  Divider,
 } from "@mui/material";
-import DescriptionIcon from "@mui/icons-material/Description";
 import { useBitConfig } from "./hooks/useBitConfig";
 import { BitConfigCore } from "./core/bitConfig";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { Composer } from "./components/Composer";
 import MobileDock from "./components/MobileDock";
-import { SEED } from "./const/seed";
+import { SEED } from "./constants/seed";
+import { APP_BRAND, APP_TAGLINE } from "./constants/brand";
 
 const App: React.FC = () => {
   const seedJson = JSON.stringify(SEED, null, 2);
@@ -85,15 +84,14 @@ const App: React.FC = () => {
             fontWeight={700}
             sx={{ fontSize: { xs: 24, sm: 32, md: 36 } }}
           >
-            BitConfig Playground
+            {APP_BRAND}
           </Typography>
           <Typography
             variant="body2"
             color="text.secondary"
             sx={{ display: { xs: "none", sm: "block" } }}
           >
-            Собирай конфиг: опциями, битовой строкой или HEX. Нормализация
-            настраивается, есть блокировка полей.
+            {APP_TAGLINE}
           </Typography>
         </Box>
 
@@ -117,19 +115,6 @@ const App: React.FC = () => {
           // снапшотим HEX для док-панели
           onHexSnapshot={(hex) => setHexSnapshot(hex)}
         />
-
-        <Divider sx={{ my: { xs: 2, md: 3 } }} />
-        <Box
-          display="flex"
-          alignItems="center"
-          gap={1}
-          sx={{ mb: { xs: 8, md: 0 } }}
-        >
-          <DescriptionIcon fontSize="small" />
-          <Typography variant="caption" color="text.secondary">
-            На мобильном снизу доступна панель быстрых действий.
-          </Typography>
-        </Box>
       </Container>
 
       {/* Нижняя док-панель (только xs/sm) */}
