@@ -3,18 +3,20 @@ import React from "react";
 import { Stack, TextField, Button } from "@mui/material";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 
-interface Props {
+type Props = {
   width: number;
   rawBits: string;
   setRawBits: (v: string) => void;
   applyBits: () => void;
-}
+  onApplied?: () => void;
+};
 
 export const BitsEditor: React.FC<Props> = ({
   width,
   rawBits,
   setRawBits,
   applyBits,
+  onApplied,
 }) => (
   <Stack spacing={1}>
     <TextField
@@ -29,7 +31,13 @@ export const BitsEditor: React.FC<Props> = ({
       }}
     />
     <Stack direction="row" spacing={1}>
-      <Button startIcon={<DataObjectIcon />} onClick={applyBits}>
+      <Button
+        startIcon={<DataObjectIcon />}
+        onClick={() => {
+          applyBits();
+          onApplied?.();
+        }}
+      >
         Применить BIT
       </Button>
     </Stack>

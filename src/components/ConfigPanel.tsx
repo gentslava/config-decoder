@@ -21,6 +21,7 @@ import {
   useMediaQuery,
   useTheme,
   Grid,
+  Snackbar,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
@@ -50,14 +51,24 @@ export const ConfigPanel: React.FC<Props> = ({
   const theme = useTheme();
   const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [jsonCollapsed, setJsonCollapsed] = useState(false);
+  const [jsonCollapsed, setJsonCollapsed] = useState(true);
   const [layoutCollapsed, setLayoutCollapsed] = useState(false);
 
+  // Snackbar
+  const [toast, setToast] = useState<{ open: boolean; msg: string }>({
+    open: false,
+    msg: "",
+  });
+  const notify = (msg: string) => setToast({ open: true, msg });
+  const closeToast = () => setToast((s) => ({ ...s, open: false }));
+
+  // Превью JSON
   const jsonPreview = useMemo(() => {
     const max = 800;
     return rawJson.length > max ? rawJson.slice(0, max) + "…" : rawJson;
   }, [rawJson]);
 
+  // Превью раскладки
   const previewCount = 12;
   const previewLayout = useMemo(() => layout.slice(0, previewCount), [layout]);
 
@@ -128,6 +139,7 @@ export const ConfigPanel: React.FC<Props> = ({
       if (!file) return;
       const text = await file.text();
       setRawJson(text);
+      notify("Файл загружен");
     };
     input.click();
   };
@@ -140,11 +152,12 @@ export const ConfigPanel: React.FC<Props> = ({
     a.download = "config.json";
     a.click();
     URL.revokeObjectURL(url);
+    notify("Скачивание началось");
   };
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, mb: 4 }}>
-      {/* Верхняя панель с действиями — адаптивная */}
+      {/* Верхняя панель с действиями */}
       <Stack
         direction="row"
         alignItems="center"
@@ -162,16 +175,21 @@ export const ConfigPanel: React.FC<Props> = ({
                 <UploadFileIcon />
               </IconButton>
             </Tooltip>
+
             <Tooltip title="Скачать JSON">
               <IconButton size="small" onClick={downloadFile}>
                 <FileDownloadIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Применить">
+
+            <Tooltip title="Применить конфигурацию">
               <IconButton
                 color="primary"
                 size="small"
-                onClick={() => onApply(rawJson)}
+                onClick={() => {
+                  onApply(rawJson);
+                  notify("Конфигурация применена");
+                }}
               >
                 <ConstructionIcon />
               </IconButton>
@@ -188,7 +206,10 @@ export const ConfigPanel: React.FC<Props> = ({
             <Button
               variant="contained"
               startIcon={<ConstructionIcon />}
-              onClick={() => onApply(rawJson)}
+              onClick={() => {
+                onApply(rawJson);
+                notify("Конфигурация применена");
+              }}
             >
               Применить
             </Button>
@@ -196,7 +217,6 @@ export const ConfigPanel: React.FC<Props> = ({
         )}
       </Stack>
 
-      {/* Сводка — Grid v2 */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         <Grid size={{ xs: 6, sm: 4, md: 3 }}>
           <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -226,7 +246,7 @@ export const ConfigPanel: React.FC<Props> = ({
             </Typography>
           </Paper>
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 4, md: 6 }}>
           <Paper
             variant="outlined"
             sx={{
@@ -283,6 +303,7 @@ export const ConfigPanel: React.FC<Props> = ({
           </IconButton>
         </Stack>
 
+        {/* Превью JSON (свернутое состояние редактирования) */}
         <Collapse in={jsonCollapsed} unmountOnExit={false}>
           <Paper
             variant="outlined"
@@ -313,6 +334,7 @@ export const ConfigPanel: React.FC<Props> = ({
           </Paper>
         </Collapse>
 
+        {/* Полное редактирование JSON */}
         <Collapse in={!jsonCollapsed} unmountOnExit>
           <TextField
             label="JSON"
@@ -349,7 +371,7 @@ export const ConfigPanel: React.FC<Props> = ({
           </IconButton>
         </Stack>
 
-        {/* Превью */}
+        {/* Превью (первые N строк) */}
         <Collapse in={layoutCollapsed} unmountOnExit={false}>
           <TableContainer
             component={Paper}
@@ -406,6 +428,15 @@ export const ConfigPanel: React.FC<Props> = ({
           <Divider sx={{ mt: 1 }} />
         </Collapse>
       </Paper>
+
+      {/* Snackbar для UX-подсказок */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={1500}
+        onClose={closeToast}
+        message={toast.msg}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
     </Paper>
   );
 };

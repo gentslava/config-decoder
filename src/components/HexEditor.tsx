@@ -5,18 +5,20 @@ import DataObjectIcon from "@mui/icons-material/DataObject";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { BitConfigCore } from "../core/bitConfig";
 
-interface Props {
+type Props = {
   bitString: string;
   hexInput: string;
   setHexInput: (v: string) => void;
   setFromHex: (hex: string) => void;
-}
+  onApplied?: () => void;
+};
 
 export const HexEditor: React.FC<Props> = ({
   bitString,
   hexInput,
   setHexInput,
   setFromHex,
+  onApplied,
 }) => {
   const copy = (t: string) => navigator.clipboard?.writeText(String(t));
   const hexOut = useMemo(
@@ -40,7 +42,10 @@ export const HexEditor: React.FC<Props> = ({
       <Stack direction="row" spacing={1}>
         <Button
           startIcon={<DataObjectIcon />}
-          onClick={() => setFromHex(hexInput)}
+          onClick={() => {
+            setFromHex(hexInput);
+            onApplied?.();
+          }}
         >
           Применить HEX
         </Button>

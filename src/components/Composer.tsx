@@ -15,9 +15,8 @@ import {
   TextField,
   IconButton,
   Alert,
-  useMediaQuery,
-  useTheme,
   Tooltip,
+  Snackbar,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import LockIcon from "@mui/icons-material/Lock";
@@ -45,9 +44,6 @@ type Props = {
 };
 
 export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
-  const theme = useTheme();
-  const isXs = useMediaQuery(theme.breakpoints.down("sm"));
-
   // ------- состояние -------
   const [selections, setSelections] = useState<Record<string, string>>({});
   /** Полный "вход" пользователя: может быть любой длины, включая хвост > width */
@@ -89,6 +85,14 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
   const [tailBits, setTailBits] = useState(""); // хвост сверх width
   const [shortDelta, setShortDelta] = useState(0); // недостающие биты до width при "не дополнять"
 
+  // Snackbar
+  const [toast, setToast] = useState<{ open: boolean; msg: string }>({
+    open: false,
+    msg: "",
+  });
+  const notify = (msg: string) => setToast({ open: true, msg });
+  const closeToast = () => setToast((s) => ({ ...s, open: false }));
+
   // Сброс при смене ширины (новый конфиг)
   useEffect(() => {
     const zeros = "0".repeat(width || 0);
@@ -104,7 +108,10 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
     setShortDelta(0);
   }, [width]);
 
-  const copy = (t: string) => navigator.clipboard?.writeText(String(t));
+  const copy = (t: string, label = "Скопировано") => {
+    navigator.clipboard?.writeText(String(t));
+    notify(label);
+  };
 
   // Пересчет статусов по покрытию (для MISSING/PARTIAL/UNKNOWN)
   const recomputeStatuses = useCallback(
@@ -142,24 +149,20 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
     setBaseBits(outBits);
     setConflicts(c);
 
-    // === НОВОЕ: корректно обновляем "Текущий результат" ===
+    // Обновляем «Текущий результат»
     let nextResultBits: string;
     if (padDirection === "none" || trimDirection === "none") {
-      // Не дополняем и не обрезаем: оверлеим голову текущего bitString длиной L
       const L = Math.min(bitString.length, width);
       nextResultBits =
         L > 0 ? outBits.slice(0, L) + bitString.slice(L) : bitString;
       setBitString(nextResultBits);
-      // tailBits/shortDelta сохраняем как были — мы их не меняем селекторами
     } else {
-      // Строгий режим: результат = полный кадр
       nextResultBits = outBits;
       setBitString(nextResultBits);
       setTailBits("");
       setShortDelta(0);
     }
 
-    // Обновляем selections из декодирования по кадру
     const decoded = BitConfigCore.decodeBits(layout, outBits);
     const nextSel: Record<string, string> = {};
     for (const f of layout) {
@@ -167,15 +170,12 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
       nextSel[f.kindKey] = d?.option ? d.option.key : d?.binary;
     }
     setSelections(nextSel);
-
-    // Статусы считаем: frame=outBits, вход=nextResultBits (с учетом хвоста/длины)
     recomputeStatuses(outBits, nextResultBits);
   };
 
   // Применение произвольных BIT
   const applyBits = () => {
     const raw = rawBits.replace(/[^01]/g, "");
-    // Режим: не дополнять/не обрезать — вход как есть, кадр обновляем покрытой частью
     if (padDirection === "none" || trimDirection === "none") {
       setBitString(raw);
       const nextBase = BitConfigCore.overlayIntoFrame(baseBits, raw, width);
@@ -192,10 +192,10 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
       setSelections(next);
       setConflicts([]);
       recomputeStatuses(nextBase, raw);
+      notify("Биты применены");
       return;
     }
 
-    // Строгая нормализация — здесь padDirection/trimDirection уже типа 'left' | 'right'
     const normalized = BitConfigCore.normalizeBitsToWidth(
       raw,
       width,
@@ -216,6 +216,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
     setSelections(next);
     setConflicts([]);
     recomputeStatuses(normalized, normalized);
+    notify("Биты применены");
   };
 
   // Применение HEX
@@ -240,6 +241,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
         setSelections(next);
         setConflicts([]);
         recomputeStatuses(nextBase, raw);
+        notify("HEX применён");
         return;
       }
 
@@ -263,6 +265,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
       setSelections(next);
       setConflicts([]);
       recomputeStatuses(normalized, normalized);
+      notify("HEX применён");
     } catch (e: any) {
       alert(e.message || String(e));
     }
@@ -358,33 +361,16 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
           </FormControl>
 
           <Stack direction="row" spacing={1} sx={{ ml: { md: "auto" } }}>
-            {isXs ? (
-              <>
-                <Tooltip title="Заблокировать все">
-                  <IconButton size="small" onClick={lockAll}>
-                    <LockIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Разблокировать все">
-                  <IconButton size="small" onClick={unlockAll}>
-                    <LockOpenIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </>
-            ) : (
-              <>
-                <Button size="small" startIcon={<LockIcon />} onClick={lockAll}>
-                  Заблокировать все
-                </Button>
-                <Button
-                  size="small"
-                  startIcon={<LockOpenIcon />}
-                  onClick={unlockAll}
-                >
-                  Разблокировать все
-                </Button>
-              </>
-            )}
+            <Button size="small" startIcon={<LockIcon />} onClick={lockAll}>
+              Заблокировать все
+            </Button>
+            <Button
+              size="small"
+              startIcon={<LockOpenIcon />}
+              onClick={unlockAll}
+            >
+              Разблокировать все
+            </Button>
           </Stack>
         </Stack>
       </Paper>
@@ -407,7 +393,10 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
           width={width}
           rawBits={rawBits}
           setRawBits={setRawBits}
-          applyBits={applyBits}
+          applyBits={() => {
+            applyBits();
+          }}
+          onApplied={() => notify("Биты применены")}
         />
       )}
 
@@ -416,7 +405,10 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
           bitString={bitString}
           hexInput={hexInput}
           setHexInput={setHexInput}
-          setFromHex={setFromHex}
+          setFromHex={(hex) => {
+            setFromHex(hex);
+          }}
+          onApplied={() => notify("HEX применён")}
         />
       )}
 
@@ -498,7 +490,11 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
       <Stack spacing={1}>
         <Typography variant="subtitle2">Текущий результат</Typography>
 
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1}
+          alignItems={{ md: "center" }}
+        >
           <TextField
             fullWidth
             size="small"
@@ -509,16 +505,22 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
               sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
             }}
           />
-          <IconButton
-            onClick={() => copy(bitString)}
-            aria-label="copy bits"
-            size="small"
-          >
-            <ContentCopyIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Скопировать битовую строку">
+            <IconButton
+              onClick={() => copy(bitString)}
+              aria-label="copy bits"
+              size="small"
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
 
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1}
+          alignItems={{ md: "center" }}
+        >
           <TextField
             fullWidth
             size="small"
@@ -529,16 +531,22 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
               sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
             }}
           />
-          <IconButton
-            onClick={() => copy(hexDisplay)}
-            aria-label="copy hex"
-            size="small"
-          >
-            <ContentCopyIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Скопировать HEX">
+            <IconButton
+              onClick={() => copy(hexDisplay)}
+              aria-label="copy hex"
+              size="small"
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
 
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1}
+          alignItems={{ md: "center" }}
+        >
           <TextField
             fullWidth
             size="small"
@@ -549,13 +557,15 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
               sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
             }}
           />
-          <IconButton
-            onClick={() => copy(bigIntDisplay)}
-            aria-label="copy bigint"
-            size="small"
-          >
-            <ContentCopyIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Скопировать BigInt">
+            <IconButton
+              onClick={() => copy(bigIntDisplay)}
+              aria-label="copy bigint"
+              size="small"
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
 
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
@@ -568,6 +578,14 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
           </Typography>
         </Stack>
       </Stack>
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={1600}
+        onClose={closeToast}
+        message={toast.msg}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
     </Paper>
   );
 };
