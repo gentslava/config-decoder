@@ -1,46 +1,140 @@
-# Getting Started with Create React App
+# BitConfig Composer
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Интерактивное приложение для разбора и сборки «битовых» конфигураций по JSON-описанию функций (проектов/опций). Позволяет:
 
-## Available Scripts
+- редактировать конфиг как **набор опций**, **битовую строку** или **HEX**;
+- видеть, какие **биты** соответствуют каким **функциям** и как они кодируются;
+- работать в режимах **дополнения/обрезки** или **«не дополнять/не обрезать»**;
+- подсвечивать **MISSING** / **PARTIAL** / **UNKNOWN** и конфликты с **блокировками**.
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## Демо-сценарий
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+1. **Загрузите JSON** с описанием функций (кнопка со значком «файл» в блоке «1) Конфигурация»).
+2. Нажмите **«Применить»** — из JSON построится раскладка: каждой функции задаются `start` (позиция) и `length` (длина в битах).
+3. Перейдите во вкладку **«Опции»**:
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+   - выберите значения функций из выпадающих списков **или** введите двоичный код длиной `length`.
+   - при необходимости заблокируйте поле (иконка «замка»), чтобы защищать от изменений.
 
-### `npm test`
+4. Во вкладке **«Биты»** или **«HEX»** можно задать конфиг напрямую:
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+   - в режиме **«не дополнять/не обрезать»** хвост/недостачу сохраняются и подсвечиваются.
 
-### `npm run build`
+5. Внизу блока **«Текущий результат»** доступны поля **BIT/HEX/BigInt** и кнопки **Копировать** (с иконкой и текстом).
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## JSON-схема
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+JSON — **массив** функций. Каждая функция задаёт:
 
-### `npm run eject`
+- `key` — строковый ключ функции (например `"0"`, `"1"`…),
+- `halKey` — технический идентификатор,
+- `nameEn` / `nameCn` — названия,
+- `introduce` — описание,
+- `values` — набор вариантов; у каждого варианта:
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+  - `value` — **битовый код** (строка из `0/1`),
+  - `key`, `nameEn`, `nameCn` — метаданные варианта.
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Пример (усечённо):
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+```json
+[
+  {
+    "key": "0",
+    "halKey": "KIND_PROJECT_CODE = 0",
+    "nameEn": "PROJECT CODE",
+    "values": [
+      { "value": "00011011", "key": "AAA21", "nameEn": "ES21 PROJECT" },
+      { "value": "00011100", "key": "AAA22", "nameEn": "A01 PROJECT" }
+    ]
+  },
+  {
+    "key": "1",
+    "halKey": "KIND_AUDIO_VIDEO_SYSTEM = 1",
+    "nameEn": "AUDIO+VIDEO SYSTEM",
+    "values": [
+      { "value": "00000", "key": "VAA00", "nameEn": "BLANK COVER" },
+      { "value": "00001", "key": "VAA02", "nameEn": "NON-AUDIO(WITH WIRE)" }
+    ]
+  }
+]
+```
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+**Как вычисляются `start`/`length`:**
 
-## Learn More
+- `length` берётся из длины `value` (у всех вариантов одной функции длина должна совпадать).
+- `start` — **накапливается** в порядке функций: первая начинается с `0`, следующая — с `start + length` предыдущей и т. д.
+  Пример: `PROJECT CODE` (8 бит) → `AUDIO+VIDEO SYSTEM` стартует с позиции `8`, длина 5 бит → следующая начнётся с `13`, и т. п.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+> Если в проекте добавлен альтернативный «layout builder» с явной поддержкой `start` в JSON — он будет использован. По умолчанию используется **последовательная** компоновка.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
+
+## Особенности кодирования/режимы
+
+В панели настроек (над вкладками) доступны два поведения:
+
+- **Дополнение (короче width)**
+  `left` — дополнить **слева** нулями;
+  `right` — дополнить **справа**;
+  `none` — **не дополнять** (короткий вход остаётся таким же, поля вне входа подсвечиваются `MISSING`/`PARTIAL`).
+
+- **Обрезка (длиннее width)**
+  `left` — обрезать **слева**;
+  `right` — обрезать **справа**;
+  `none` — **не обрезать** (лишний хвост сохраняется и показывается отдельным блоком как «неизвестные функции»).
+
+**Важно:**
+
+- В режиме `none`/`none` «Текущий результат» = **исходный вход**. Приложение не подгоняет длину, а только накладывает голову на видимые биты.
+- Экспорт **HEX** выравнивается **только до целого байта** (внутренний буфер не меняется).
+
+## Как пользоваться UI
+
+### 1) Конфигурация (верхняя панель)
+
+- **Загрузить JSON** — выбрать файл с конфигурацией; после загрузки — «Файл загружен».
+- **Скачать JSON** — выгрузить текущий JSON (состояние редактора).
+- **Применить** — применить JSON к раскладке (рассчитать `start/length`), «Конфигурация применена».
+- Ниже — **редактор JSON** (можно свернуть в превью) и **таблица раскладки**:
+
+  - свернуть/развернуть (иконки «стрелок»),
+  - полная таблица — **виртуализирована** (react-virtuoso).
+
+### 2) Компоновка
+
+- **Опции** — список функций с поиском (не теряет фокус). У каждой:
+
+  - Select с вариантами (ключ, название, битовый код),
+  - поле «вручную (N бит)» для ввода бинарного значения,
+  - иконка «замок» — заблокировать/разблокировать,
+  - индикаторы состояния: `MISSING`, `PARTIAL`, `UNKNOWN`, `LOCKED`.
+
+- **Биты** — введите произвольную битстроку и нажмите **Применить биты**.
+- **HEX** — введите HEX и нажмите **Применить HEX**.
+- **Режимы нормализации** — в панели над вкладками.
+  Для `none`/`none`:
+
+  - при **коротком входе** поля вне покрытия помечаются `MISSING`/`PARTIAL`;
+  - при **длинном входе** хвост отображается отдельно (в BITS и HEX).
+
+- **Текущий результат** — BIT / HEX / BigInt + кнопки **Копировать** (иконка+текст, всплывает «Скопировано»).
+
+---
+
+## Подсветка состояний
+
+- **MISSING** — поле **полностью вне** текущей битовой строки (вход короче `start + length`).
+- **PARTIAL** — поле **частично покрыто** входом (например, битов не хватает на конец функции).
+- **UNKNOWN** — поле целиком покрыто входом, но двоичный код **не совпал** ни с одной опцией.
+- **LOCKED** — попытка изменения поля, помеченного как заблокированное (конфликт).
+
+---
+
+## Лицензия
+
+MIT. Используйте свободно, откаты, ишьюсы и предложения приветствуются.
