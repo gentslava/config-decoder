@@ -1,7 +1,7 @@
 {
-  "name": "gwm-config-decoder",
+  "name": "config-decoder",
   "version": "1.0.0",
-  "description": "GWM Config Decoder — приложение для разбора и сравнения битовых конфигураций по JSON.",
+  "description": "Config Decoder — приложение для разбора, кодирования и сравнения битовых конфигураций по JSON.",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.14.0",
