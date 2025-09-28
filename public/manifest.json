@@ -1,6 +1,6 @@
 {
   "short_name": "Config Decoder",
-  "name": "Config Decoder — приложение для разбора и сравнения битовых конфигураций по JSON.",
+  "name": "Config Decoder — приложение для разбора, редактирования и сравнения битовых конфигураций по JSON.",
   "icons": [
     {
       "src": "favicon.ico",
