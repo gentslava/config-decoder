@@ -52,7 +52,7 @@ export const ConfigPanel: React.FC<Props> = ({
   const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [jsonCollapsed, setJsonCollapsed] = useState(true);
-  const [layoutCollapsed, setLayoutCollapsed] = useState(false);
+  const [layoutCollapsed, setLayoutCollapsed] = useState(true);
 
   // Snackbar
   const [toast, setToast] = useState<{ open: boolean; msg: string }>({
