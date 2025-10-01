@@ -1,8 +1,7 @@
 // src/App.tsx
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   ThemeProvider,
-  createTheme,
   CssBaseline,
   Container,
   Box,
@@ -16,28 +15,13 @@ import { Composer } from "./components/Composer";
 import MobileDock from "./components/MobileDock";
 import { SEED } from "./constants/seed";
 import { APP_BRAND, APP_TAGLINE } from "./constants/brand";
+import ThemeToggle from "./components/ThemeToggle";
+import { OUTER_THEME } from "./core/muiConfig";
 
 const App: React.FC = () => {
   const seedJson = JSON.stringify(SEED, null, 2);
   const { rawJson, setRawJson, layout, error, setError, width } =
     useBitConfig(seedJson);
-
-  const theme = useMemo(
-    () =>
-      createTheme({
-        palette: { mode: "light" },
-        typography: {
-          fontFamily: [
-            "Inter",
-            "Roboto",
-            "system-ui",
-            "Arial",
-            "sans-serif",
-          ].join(","),
-        },
-      }),
-    []
-  );
 
   // snapshot актуального HEX из Composer (для MobileDock)
   const [hexSnapshot, setHexSnapshot] = useState("");
@@ -67,32 +51,44 @@ const App: React.FC = () => {
   const copyHex = () => navigator.clipboard?.writeText(hexSnapshot || "");
 
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={OUTER_THEME} defaultMode="system">
       <CssBaseline />
       <Container
         maxWidth="lg"
         sx={{
           py: { xs: 2, md: 4 },
           px: { xs: 1.5, sm: 2 },
-          // чтобы контент не уезжал под док-панель
           pb: { xs: "88px", md: 0 },
         }}
       >
-        <Box sx={{ mb: { xs: 2, md: 3 } }}>
-          <Typography
-            variant="h4"
-            fontWeight={700}
-            sx={{ fontSize: { xs: 24, sm: 32, md: 36 } }}
-          >
-            {APP_BRAND}
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: { xs: "none", sm: "block" } }}
-          >
-            {APP_TAGLINE}
-          </Typography>
+        <Box
+          sx={{
+            mb: { xs: 2, md: 3 },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Box>
+            <Typography
+              variant="h4"
+              fontWeight={700}
+              sx={{ fontSize: { xs: 24, sm: 32, md: 36 } }}
+            >
+              {APP_BRAND}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: { xs: "none", sm: "block" } }}
+            >
+              {APP_TAGLINE}
+            </Typography>
+          </Box>
+          {/* Переключатель темы */}
+          <Box sx={{ ml: 2 }}>
+            <ThemeToggle />
+          </Box>
         </Box>
 
         {error && (
@@ -112,12 +108,10 @@ const App: React.FC = () => {
         <Composer
           layout={layout}
           width={width}
-          // снапшотим HEX для док-панели
           onHexSnapshot={(hex) => setHexSnapshot(hex)}
         />
       </Container>
 
-      {/* Нижняя док-панель (только xs/sm) */}
       <MobileDock
         onUpload={openFile}
         onApply={applyConfig}
