@@ -7,7 +7,10 @@ import {
   Box,
   Typography,
   Alert,
+  Button,
+  Dialog,
 } from "@mui/material";
+import { HexEditor } from "./components/HexEditor";
 import { useBitConfig } from "./hooks/useBitConfig";
 import { BitConfigCore } from "./core/bitConfig";
 import { ConfigPanel } from "./components/ConfigPanel";
@@ -22,9 +25,10 @@ const App: React.FC = () => {
   const seedJson = JSON.stringify(SEED, null, 2);
   const { rawJson, setRawJson, layout, error, setError, width } =
     useBitConfig(seedJson);
-
-  // snapshot актуального HEX из Composer (для MobileDock)
   const [hexSnapshot, setHexSnapshot] = useState("");
+  const [hexInput, setHexInput] = useState("");
+  const [bitString, setBitString] = useState("");
+  const [configOpen, setConfigOpen] = useState(false);
 
   // действия MobileDock
   const openFile = async () => {
@@ -85,7 +89,6 @@ const App: React.FC = () => {
               {APP_TAGLINE}
             </Typography>
           </Box>
-          {/* Переключатель темы */}
           <Box sx={{ ml: 2 }}>
             <ThemeToggle />
           </Box>
@@ -97,19 +100,65 @@ const App: React.FC = () => {
           </Alert>
         )}
 
-        <ConfigPanel
-          rawJson={rawJson}
-          setRawJson={setRawJson}
-          layout={layout}
-          width={width}
-          onApply={applyConfig}
+        <HexEditor
+          bitString={bitString}
+          hexInput={hexInput}
+          setHexInput={setHexInput}
+          setFromHex={(hex) => {
+            try {
+              const bytes = BitConfigCore.hexToBytes(hex);
+              const raw = BitConfigCore.bytesToBitString(bytes);
+              setBitString(raw);
+              setHexInput(hex);
+            } catch (e) {
+              const msg =
+                typeof e === "object" && e && "message" in e
+                  ? (e as any).message
+                  : String(e);
+              setError(msg);
+            }
+          }}
         />
 
         <Composer
           layout={layout}
           width={width}
-          onHexSnapshot={(hex) => setHexSnapshot(hex)}
+          onHexSnapshot={setHexSnapshot}
+          hexInput={hexInput}
+          setHexInput={setHexInput}
         />
+
+        {/* Кнопка для открытия модального окна конфигурации (MUI) */}
+        <Box sx={{ mb: 2 }}>
+          <Button variant="outlined" onClick={() => setConfigOpen(true)}>
+            Настроить конфиг
+          </Button>
+        </Box>
+
+        {/* Модальное окно с ConfigPanel (MUI Dialog) */}
+        <Dialog
+          open={configOpen}
+          onClose={() => setConfigOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <Box sx={{ p: 2, position: "relative" }}>
+            <Button
+              variant="text"
+              onClick={() => setConfigOpen(false)}
+              sx={{ position: "absolute", top: 8, right: 8 }}
+            >
+              Закрыть
+            </Button>
+            <ConfigPanel
+              rawJson={rawJson}
+              setRawJson={setRawJson}
+              layout={layout}
+              width={width}
+              onApply={applyConfig}
+            />
+          </Box>
+        </Dialog>
       </Container>
 
       <MobileDock

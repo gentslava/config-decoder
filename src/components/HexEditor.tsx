@@ -10,7 +10,6 @@ type Props = {
   hexInput: string;
   setHexInput: (v: string) => void;
   setFromHex: (hex: string) => void;
-  onApplied?: () => void;
 };
 
 export const HexEditor: React.FC<Props> = ({
@@ -18,7 +17,6 @@ export const HexEditor: React.FC<Props> = ({
   hexInput,
   setHexInput,
   setFromHex,
-  onApplied,
 }) => {
   const copy = (t: string) => navigator.clipboard?.writeText(String(t));
   const hexOut = useMemo(
@@ -33,7 +31,7 @@ export const HexEditor: React.FC<Props> = ({
         size="small"
         label="HEX (байты через пробел/без)"
         value={hexInput}
-        onChange={(e) => setHexInput(e.target.value)}
+        onChange={(e) => setFromHex(e.target.value)}
         placeholder="C1 52 13 ... или C15213..."
         InputProps={{
           sx: { fontFamily: "JetBrains Mono, ui-monospace, monospace" },
@@ -42,10 +40,7 @@ export const HexEditor: React.FC<Props> = ({
       <Stack direction="row" spacing={1}>
         <Button
           startIcon={<DataObjectIcon />}
-          onClick={() => {
-            setFromHex(hexInput);
-            onApplied?.();
-          }}
+          onClick={() => setFromHex(hexInput)}
         >
           Применить HEX
         </Button>

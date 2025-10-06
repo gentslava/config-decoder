@@ -42,20 +42,30 @@ type Props = {
   width: number;
   /** Текущий HEX наверх (для мобильной док-панели) */
   onHexSnapshot?: (hex: string) => void;
+  hexInput: string;
+  setHexInput: (v: string) => void;
 };
 
-export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
+export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInput, setHexInput }) => {  
   // ------- состояние -------
   const [selections, setSelections] = useState<Record<string, string>>({});
-  /** Полный "вход" пользователя: может быть любой длины, включая хвост > width */
   const [bitString, setBitString] = useState("");
-  /** Внутренний кадр фиксированной ширины для декодирования опций */
   const [baseBits, setBaseBits] = useState("");
-  const [hexInput, setHexInput] = useState("");
   const [rawBits, setRawBits] = useState("");
-  const [mode, setMode] = useState<"options" | "bits" | "hex" | "diff">(
-    "options"
-  );
+  const [mode, setMode] = useState<"options" | "bits" | "hex" | "diff">("options");
+
+  // Синхронизация hexInput -> bitString
+  useEffect(() => {
+    if (!hexInput) {
+      setBitString("");
+      return;
+    }
+    try {
+      setFromHex(hexInput)
+    } catch {
+      // Некорректный HEX — не обновляем bitString
+    }
+  }, [hexInput]);
 
   // Политика нормализации/обрезки (включает 'none')
   const [padDirection, setPadDirection] = useState<PadDirection>("none");
@@ -412,7 +422,6 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot }) => {
           setFromHex={(hex) => {
             setFromHex(hex);
           }}
-          onApplied={() => notify("HEX применён")}
         />
       )}
 
