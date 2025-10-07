@@ -20,6 +20,7 @@ export const useBitConfig = (initialJson: string) => {
   useEffect(() => {
     try {
       parse(rawJson);
+      setError("");
     } catch (e: any) {
       setError(e.message || String(e));
     }
@@ -31,6 +32,7 @@ export const useBitConfig = (initialJson: string) => {
       setRawJsonState(text);
       try {
         parse(text);
+        setError("");
       } catch (e: any) {
         setError(e.message || String(e));
       }

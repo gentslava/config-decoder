@@ -3,13 +3,15 @@ import React, { useState } from "react";
 import {
   ThemeProvider,
   CssBaseline,
-  Container,
   Box,
   Typography,
   Alert,
   Button,
   Dialog,
+  Stack,
+  Snackbar,
 } from "@mui/material";
+import BuildIcon from '@mui/icons-material/Build';
 import { HexEditor } from "./components/HexEditor";
 import { useBitConfig } from "./hooks/useBitConfig";
 import { BitConfigCore } from "./core/bitConfig";
@@ -29,6 +31,14 @@ const App: React.FC = () => {
   const [hexInput, setHexInput] = useState("");
   const [bitString, setBitString] = useState("");
   const [configOpen, setConfigOpen] = useState(false);
+
+  // Snackbar
+  const [toast, setToast] = useState<{ open: boolean; msg: string }>({
+    open: false,
+    msg: "",
+  });
+  const notify = (msg: string) => setToast({ open: true, msg });
+  const closeToast = () => setToast((s) => ({ ...s, open: false }));
 
   // действия MobileDock
   const openFile = async () => {
@@ -57,17 +67,18 @@ const App: React.FC = () => {
   return (
     <ThemeProvider theme={OUTER_THEME} defaultMode="system">
       <CssBaseline />
-      <Container
+      <Stack
         maxWidth="lg"
         sx={{
           py: { xs: 2, md: 4 },
           px: { xs: 1.5, sm: 2 },
           pb: { xs: "88px", md: 0 },
+          gap: 3,
+          justifySelf: "center"
         }}
       >
         <Box
           sx={{
-            mb: { xs: 2, md: 3 },
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -89,13 +100,20 @@ const App: React.FC = () => {
               {APP_TAGLINE}
             </Typography>
           </Box>
-          <Box sx={{ ml: 2 }}>
-            <ThemeToggle />
-          </Box>
+          <Stack direction="row">
+            <Box sx={{ mb: 2 }}>
+              <Button startIcon={<BuildIcon />} onClick={() => setConfigOpen(true)}>
+                Настроить конфиг
+              </Button>
+            </Box>
+            <Box sx={{ ml: 2 }}>
+              <ThemeToggle />
+            </Box>
+          </Stack>
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error">
             {error}
           </Alert>
         )}
@@ -104,20 +122,9 @@ const App: React.FC = () => {
           bitString={bitString}
           hexInput={hexInput}
           setHexInput={setHexInput}
-          setFromHex={(hex) => {
-            try {
-              const bytes = BitConfigCore.hexToBytes(hex);
-              const raw = BitConfigCore.bytesToBitString(bytes);
-              setBitString(raw);
-              setHexInput(hex);
-            } catch (e) {
-              const msg =
-                typeof e === "object" && e && "message" in e
-                  ? (e as any).message
-                  : String(e);
-              setError(msg);
-            }
-          }}
+          setBitString={setBitString}
+          setError={setError}
+          notify={notify}
         />
 
         <Composer
@@ -126,14 +133,8 @@ const App: React.FC = () => {
           onHexSnapshot={setHexSnapshot}
           hexInput={hexInput}
           setHexInput={setHexInput}
+          notify={notify}
         />
-
-        {/* Кнопка для открытия модального окна конфигурации (MUI) */}
-        <Box sx={{ mb: 2 }}>
-          <Button variant="outlined" onClick={() => setConfigOpen(true)}>
-            Настроить конфиг
-          </Button>
-        </Box>
 
         {/* Модальное окно с ConfigPanel (MUI Dialog) */}
         <Dialog
@@ -159,13 +160,21 @@ const App: React.FC = () => {
             />
           </Box>
         </Dialog>
-      </Container>
+      </Stack>
 
       <MobileDock
         onUpload={openFile}
         onApply={applyConfig}
         onCopyHex={copyHex}
         disabledCopy={!hexSnapshot}
+      />
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={1600}
+        onClose={closeToast}
+        message={toast.msg}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </ThemeProvider>
   );

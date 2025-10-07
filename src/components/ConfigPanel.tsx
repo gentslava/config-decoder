@@ -165,7 +165,7 @@ export const ConfigPanel: React.FC<Props> = ({
         sx={{ mb: { xs: 1, md: 2 } }}
       >
         <Typography variant="h6" sx={{ fontSize: { xs: 18, md: 20 } }}>
-          1) Конфигурация
+          Конфигурация
         </Typography>
 
         {isXs ? (

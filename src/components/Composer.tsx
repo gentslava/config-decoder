@@ -6,21 +6,14 @@ import {
   Typography,
   Tabs,
   Tab,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Button,
   Divider,
   TextField,
   IconButton,
   Alert,
   Tooltip,
-  Snackbar,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
-import LockIcon from "@mui/icons-material/Lock";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DescriptionIcon from "@mui/icons-material/Description";
 
@@ -34,7 +27,6 @@ import {
 
 import { OptionsEditor } from "./OptionsEditor";
 import { BitsEditor } from "./BitsEditor";
-import { HexEditor } from "./HexEditor";
 import { ComparePanel } from "./ComparePanel";
 
 type Props = {
@@ -44,9 +36,17 @@ type Props = {
   onHexSnapshot?: (hex: string) => void;
   hexInput: string;
   setHexInput: (v: string) => void;
+  notify: (toast: string) => void;
 };
 
-export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInput, setHexInput }) => {  
+export const Composer: React.FC<Props> = ({
+  layout,
+  width,
+  onHexSnapshot,
+  hexInput,
+  setHexInput,
+  notify,
+}) => {
   // ------- состояние -------
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [bitString, setBitString] = useState("");
@@ -61,7 +61,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
       return;
     }
     try {
-      setFromHex(hexInput)
+      setFromHex(hexInput);
     } catch {
       // Некорректный HEX — не обновляем bitString
     }
@@ -75,12 +75,6 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
   const [locked, setLocked] = useState<Record<string, boolean>>({});
   const toggleLock = (kindKey: string) =>
     setLocked((m) => ({ ...m, [kindKey]: !m[kindKey] }));
-  const lockAll = () => {
-    const next: Record<string, boolean> = {};
-    for (const f of layout) next[f.kindKey] = true;
-    setLocked(next);
-  };
-  const unlockAll = () => setLocked({});
 
   // Конфликты и статусы
   const [conflicts, setConflicts] = useState<OverlayConflict[]>([]);
@@ -97,14 +91,6 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
   >({});
   const [tailBits, setTailBits] = useState(""); // хвост сверх width
   const [shortDelta, setShortDelta] = useState(0); // недостающие биты до width при "не дополнять"
-
-  // Snackbar
-  const [toast, setToast] = useState<{ open: boolean; msg: string }>({
-    open: false,
-    msg: "",
-  });
-  const notify = (msg: string) => setToast({ open: true, msg });
-  const closeToast = () => setToast((s) => ({ ...s, open: false }));
 
   // Сброс при смене ширины (новый конфиг)
   useEffect(() => {
@@ -254,7 +240,6 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
         setSelections(next);
         setConflicts([]);
         recomputeStatuses(nextBase, raw);
-        notify("HEX применён");
         return;
       }
 
@@ -278,10 +263,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
       setSelections(next);
       setConflicts([]);
       recomputeStatuses(normalized, normalized);
-      notify("HEX применён");
-    } catch (e: any) {
-      alert(e.message || String(e));
-    }
+    } catch (e: any) {}
   };
 
   // Вычисления представлений
@@ -322,7 +304,7 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
         sx={{ mb: 2, gap: 1 }}
       >
         <Typography variant="h6" sx={{ fontSize: { xs: 18, md: 20 } }}>
-          2) Компоновка конфигурации
+          Компоновка конфигурации
         </Typography>
 
         <Tabs
@@ -339,55 +321,19 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
         </Tabs>
       </Stack>
 
-      {/* Панель настроек нормализации + действия блокировок */}
-      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, mb: 2 }}>
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={1.5}
-          alignItems={{ md: "center" }}
-        >
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 220 } }}>
-            <InputLabel id="pad-dir">Дополнение (короче width)</InputLabel>
-            <Select
-              labelId="pad-dir"
-              label="Дополнение (короче width)"
-              value={padDirection}
-              onChange={onPadDirChange}
-            >
-              <MenuItem value="left">слева нулями</MenuItem>
-              <MenuItem value="right">справа нулями</MenuItem>
-              <MenuItem value="none">не дополнять</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", md: 240 } }}>
-            <InputLabel id="trim-dir">Обрезка (длиннее width)</InputLabel>
-            <Select
-              labelId="trim-dir"
-              label="Обрезка (длиннее width)"
-              value={trimDirection}
-              onChange={onTrimDirChange}
-            >
-              <MenuItem value="left">обрезать слева</MenuItem>
-              <MenuItem value="right">обрезать справа</MenuItem>
-              <MenuItem value="none">не обрезать</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Stack direction="row" spacing={1} sx={{ ml: { md: "auto" } }}>
-            <Button size="small" startIcon={<LockIcon />} onClick={lockAll}>
-              Заблокировать все
-            </Button>
-            <Button
-              size="small"
-              startIcon={<LockOpenIcon />}
-              onClick={unlockAll}
-            >
-              Разблокировать все
-            </Button>
-          </Stack>
-        </Stack>
-      </Paper>
+      <Stack
+        direction="column"
+        justifyContent="space-between"
+        alignItems={{ md: "start" }}
+        sx={{ mb: 2, gap: 1 }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          Новая конфигурация – переключите опции ниже для изменения: {hexDisplay}
+        </Typography>
+        <Button startIcon={<ContentCopyIcon />} onClick={() => copy(hexDisplay)}>
+          Копировать текущий HEX
+        </Button>
+      </Stack>
 
       {/* Контент вкладок */}
       {mode === "options" && (
@@ -411,17 +357,6 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
             applyBits();
           }}
           onApplied={() => notify("Биты применены")}
-        />
-      )}
-
-      {mode === "hex" && (
-        <HexEditor
-          bitString={bitString}
-          hexInput={hexInput}
-          setHexInput={setHexInput}
-          setFromHex={(hex) => {
-            setFromHex(hex);
-          }}
         />
       )}
 
@@ -605,14 +540,6 @@ export const Composer: React.FC<Props> = ({ layout, width, onHexSnapshot, hexInp
           </Stack>
         </Stack>
       )}
-
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={1600}
-        onClose={closeToast}
-        message={toast.msg}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      />
     </Paper>
   );
 };
