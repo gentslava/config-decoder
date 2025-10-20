@@ -13,7 +13,6 @@ import {
   Alert,
   Tooltip,
 } from "@mui/material";
-import type { SelectChangeEvent } from "@mui/material/Select";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DescriptionIcon from "@mui/icons-material/Description";
 
@@ -21,8 +20,6 @@ import {
   BitConfigCore,
   FieldLayout,
   OverlayConflict,
-  PadDirection,
-  TrimDirection,
 } from "../core/bitConfig";
 
 import { OptionsEditor } from "./OptionsEditor";
@@ -54,22 +51,11 @@ export const Composer: React.FC<Props> = ({
   const [rawBits, setRawBits] = useState("");
   const [mode, setMode] = useState<"options" | "bits" | "hex" | "diff">("options");
 
-  // Синхронизация hexInput -> bitString
-  useEffect(() => {
-    if (!hexInput) {
-      setBitString("");
-      return;
-    }
-    try {
-      setFromHex(hexInput);
-    } catch {
-      // Некорректный HEX — не обновляем bitString
-    }
-  }, [hexInput]);
-
   // Политика нормализации/обрезки (включает 'none')
-  const [padDirection, setPadDirection] = useState<PadDirection>("none");
-  const [trimDirection, setTrimDirection] = useState<TrimDirection>("none");
+  const padDirection = "none";
+  const trimDirection = "none";
+  // const [padDirection, setPadDirection] = useState<PadDirection>("none");
+  // const [trimDirection, setTrimDirection] = useState<TrimDirection>("none");
 
   // Блокировки
   const [locked, setLocked] = useState<Record<string, boolean>>({});
@@ -105,7 +91,7 @@ export const Composer: React.FC<Props> = ({
     setFieldStatuses({});
     setTailBits("");
     setShortDelta(0);
-  }, [width]);
+  }, [width, setHexInput]);
 
   const copy = (t: string, label = "Скопировано") => {
     navigator.clipboard?.writeText(String(t));
@@ -266,6 +252,20 @@ export const Composer: React.FC<Props> = ({
     } catch (e: any) {}
   };
 
+  // Синхронизация hexInput -> bitString
+  useEffect(() => {
+    if (!hexInput) {
+      setBitString("");
+      return;
+    }
+    try {
+      setFromHex(hexInput);
+    } catch {
+      // Некорректный HEX — не обновляем bitString
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hexInput]);
+
   // Вычисления представлений
   const bigIntDisplay = useMemo(
     () =>
@@ -287,12 +287,6 @@ export const Composer: React.FC<Props> = ({
   useEffect(() => {
     if (onHexSnapshot) onHexSnapshot(hexDisplay);
   }, [hexDisplay, onHexSnapshot]);
-
-  // Обработчики Select с типами (чтобы состояние не «сужалось»)
-  const onPadDirChange = (e: SelectChangeEvent<PadDirection>) =>
-    setPadDirection(e.target.value as PadDirection);
-  const onTrimDirChange = (e: SelectChangeEvent<TrimDirection>) =>
-    setTrimDirection(e.target.value as TrimDirection);
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, mb: 4 }}>
