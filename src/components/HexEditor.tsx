@@ -31,7 +31,7 @@ export const HexEditor: React.FC<Props> = ({
   };
 
   const handleBlur = (hex: string) => {
-    if (hex) notify("HEX применён");
+    // if (hex) notify("HEX применён");
     setHexInput(hex);
     try {
       const bytes = BitConfigCore.hexToBytes(hex);
